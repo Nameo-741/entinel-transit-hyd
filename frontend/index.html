@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Bus Tracker — Hyderabad Real-Time Transit</title>
+    <meta name="description"
+        content="Track Hyderabad city buses in real-time. Plan your journey, find the fastest routes, and get AI-powered transit assistance.">
+
+    <!-- Sora Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* ════════════════════════════════════════════════════
+           PREMIUM CSS BACKGROUND SYSTEM
+           No Spline, no heavy libraries. Pure CSS gradients +
+           keyframe animations. GPU-composited (transform/opacity
+           only) — zero layout thrash, 60fps on any device.
+        ════════════════════════════════════════════════════ */
+
+        /* ── 1. Deep dark canvas ── */
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #050507;
+            color: #F8FAFC;
+            font-family: 'Sora', sans-serif;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            user-select: none;
+        }
+
+        input, textarea, .ai-chat-messages, #results {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            user-select: text;
+        }
+
+        /* ── 2. Static gradient base ──
+           A deep, multi-stop vertical gradient gives the page
+           its primary atmosphere without any animation cost. */
+        .bg-base {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                linear-gradient(
+                    160deg,
+                    #060610 0%,
+                    #080818 30%,
+                    #050510 60%,
+                    #040408 100%
+                );
+        }
+
+        /* ── 3. Animated atmospheric glow orbs ──
+           Each orb is a large radial gradient animated with
+           transform: translate + scale. GPU-composited only. */
+        .bg-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            will-change: transform, opacity;
+            z-index: 1;
+        }
+
+        /* Cyan orb — top-left */
+        .bg-orb--cyan {
+            width: 70vw;
+            height: 70vw;
+            top: -25%;
+            left: -15%;
+            background: radial-gradient(circle,
+                rgba(0, 220, 255, 0.13) 0%,
+                rgba(0, 160, 220, 0.06) 40%,
+                transparent 70%);
+            animation: orb-drift-1 22s ease-in-out infinite alternate;
+        }
+
+        /* Purple orb — bottom-right */
+        .bg-orb--purple {
+            width: 65vw;
+            height: 65vw;
+            bottom: -20%;
+            right: -15%;
+            background: radial-gradient(circle,
+                rgba(120, 60, 255, 0.12) 0%,
+                rgba(180, 40, 200, 0.05) 45%,
+                transparent 70%);
+            animation: orb-drift-2 28s ease-in-out infinite alternate;
+        }
+
+        /* Blue accent — center-right */
+        .bg-orb--blue {
+            width: 45vw;
+            height: 45vw;
+            top: 30%;
+            right: 5%;
+            background: radial-gradient(circle,
+                rgba(30, 80, 220, 0.09) 0%,
+                rgba(10, 40, 180, 0.04) 50%,
+                transparent 70%);
+            animation: orb-drift-3 18s ease-in-out infinite alternate;
+        }
+
+        /* Subtle warm accent — bottom-left */
+        .bg-orb--warm {
+            width: 40vw;
+            height: 40vw;
+            bottom: 5%;
+            left: 10%;
+            background: radial-gradient(circle,
+                rgba(80, 0, 180, 0.08) 0%,
+                rgba(40, 0, 120, 0.03) 55%,
+                transparent 70%);
+            animation: orb-drift-4 24s ease-in-out infinite alternate;
+        }
+
+        /* GPU-safe keyframes — transform only, no layout changes */
+        @keyframes orb-drift-1 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(6vw, 4vh) scale(1.08); }
+            100% { transform: translate(2vw, 8vh) scale(0.95); }
+        }
+        @keyframes orb-drift-2 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-5vw, -6vh) scale(1.1); }
+            100% { transform: translate(-2vw, -3vh) scale(0.92); }
+        }
+        @keyframes orb-drift-3 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(-4vw, 5vh) scale(1.05); }
+            100% { transform: translate(3vw, -2vh) scale(0.98); }
+        }
+        @keyframes orb-drift-4 {
+            0%   { transform: translate(0, 0) scale(1); }
+            50%  { transform: translate(3vw, -4vh) scale(1.06); }
+            100% { transform: translate(-2vw, 2vh) scale(0.94); }
+        }
+
+        /* ── 4. Grid/dot texture overlay ──
+           SVG data-URI dot grid — gives the "Apple / Linear"
+           depth texture at near-zero performance cost. */
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0.035;
+            background-image:
+                radial-gradient(circle, rgba(255,255,255,0.6) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        /* ── 5. Vignette ──
+           Darker at edges, draws eye to the centre. */
+        .bg-vignette {
+            position: fixed;
+            inset: 0;
+            z-index: 3;
+            pointer-events: none;
+            background: radial-gradient(
+                ellipse 100% 100% at 50% 50%,
+                transparent 40%,
+                rgba(3, 3, 6, 0.55) 100%
+            );
+        }
+
+        /* ── 6. Noise overlay ── */
+        .noise-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 4;
+            pointer-events: none;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 200px 200px;
+        }
+
+        /* ── 7. App shell sits above all background layers ── */
+        #app-shell {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Re-enable pointer events on interactive elements */
+        #app-shell .slide.active,
+        #app-shell .slide.active *,
+        #admin-modal,
+        #admin-modal *,
+        #ai-assistant-btn,
+        #ai-chat-window,
+        #ai-chat-window * {
+            pointer-events: auto;
+        }
+
+        #landing.active .welcome-card { pointer-events: auto; }
+
+        button, input, label,
+        .bus-card, .ac-item, .swap-btn,
+        #theme-toggle, #new-search-btn, #clear-map-btn,
+        #ai-assistant-btn, #ai-chat-close, #ai-chat-form, #ai-chat-input,
+        .toggle-group label, .results-actions button,
+        .close-admin, .welcome-card {
+            pointer-events: auto !important;
+        }
+
+        /* ── 8. Strong glassmorphism panels ──
+           More backdrop-filter strength now that background
+           has real colour depth to blur. */
+        #results-section {
+            backdrop-filter: blur(24px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+            background: rgba(6, 6, 12, 0.62) !important;
+            border: 1px solid rgba(255,255,255,0.07) !important;
+        }
+
+        #ai-chat-window {
+            backdrop-filter: blur(24px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+            background: rgba(6, 6, 12, 0.68) !important;
+        }
+
+        .search-panel {
+            backdrop-filter: blur(40px) saturate(200%) !important;
+            -webkit-backdrop-filter: blur(40px) saturate(200%) !important;
+            background: rgba(6, 6, 12, 0.60) !important;
+        }
+
+        /* ── Extras: Functional Slides ── */
+        .landing-footer {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .landing-footer button {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            font-size: 12px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .landing-footer button:hover {
+            color: #00f000;
+        }
+
+        .back-btn {
+            background: transparent;
+            color: #00f000;
+            font-size: 12px;
+            text-align: left;
+            margin-bottom: 15px;
+            cursor: pointer;
+            padding: 0;
+            border: none;
+            display: inline-block;
+        }
+
+        .transmit-btn {
+            width: 100%;
+            padding: 18px 24px;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-top: 0.5rem;
+        }
+
+        .transmit-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 16px 32px rgba(255, 255, 255, 0.15);
+        }
+
+        /* ── 9. Typography ── */
+        #title, #subtitle, h1, h2, h3,
+        button, input, label, p, span,
+        .bus-card, .ai-msg, .search-panel,
+        .admin-card, .stat-pill, .system-strip {
+            font-family: 'Sora', sans-serif !important;
+        }
+
+        /* ── 10. Body pseudo-elements ── (keep subtle glow from style.css) */
+        /* body::before, body::after styling controlled by style.css */
+    </style>
+</head>
+
+<body>
+
+    <!-- ════════════════════════════════════════════
+         PREMIUM CSS BACKGROUND LAYERS
+         (No Spline, no WebGL, no tsParticles)
+    ════════════════════════════════════════════ -->
+
+    <!-- Layer 0: solid dark base -->
+    <div class="bg-base"></div>
+
+    <!-- Layer 1–4: animated glow orbs (CSS keyframes only) -->
+    <div class="bg-orb bg-orb--cyan"></div>
+    <div class="bg-orb bg-orb--purple"></div>
+    <div class="bg-orb bg-orb--blue"></div>
+    <div class="bg-orb bg-orb--warm"></div>
+
+    <!-- Layer 5: dot grid texture -->
+    <div class="bg-grid"></div>
+
+    <!-- Layer 6: vignette -->
+    <div class="bg-vignette"></div>
+
+    <!-- Layer 7: film grain noise -->
+    <div class="noise-overlay"></div>
+
+    <audio id="hover-sound" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"
+        preload="auto"></audio>
+
+    <!-- ════════════════════════════════════════════
+         APP SHELL — All UI above background layers
+    ════════════════════════════════════════════ -->
+    <div id="app-shell">
+
+        <div id="admin-modal">
+            <div class="admin-card">
+                <button class="close-admin" onclick="closeAdmin()">×</button>
+                <h2>System Override</h2>
+                <div class="field">
+                    <label>Admin ID</label>
+                    <input type="text" id="admin-user" placeholder="Enter credentials">
+                </div>
+                <div class="field">
+                    <label>Passcode</label>
+                    <input type="password" id="admin-pass" placeholder="Enter passcode">
+                </div>
+                <button onclick="loginAdmin()">Access Mainframe</button>
+                <div id="admin-terminal" class="hidden"></div>
+            </div>
+        </div>
+
+        <section id="landing" class="slide active">
+            <div class="welcome-card">
+                <div class="system-strip">
+                    <span id="live-clock">--:--:--</span>
+                    <span class="dot-sep">•</span>
+                    <span id="net-status">Transit Network Online</span>
+                </div>
+                <div class="icon-container">
+                    <svg class="neon-bus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 6v6"></path>
+                        <path d="M15 6v6"></path>
+                        <path d="M2 12h19.6"></path>
+                        <path
+                            d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3">
+                        </path>
+                        <circle cx="7" cy="18" r="2"></circle>
+                        <path d="M9 18h5"></path>
+                        <circle cx="16" cy="18" r="2"></circle>
+                    </svg>
+                    <div class="radar-ping"></div>
+                </div>
+
+                <h1 id="title">City Bus Tracker</h1>
+                <p id="subtitle">Hyderabad's Real-Time Transit</p>
+
+                <div class="landing-stats">
+                    <div class="stat-pill"><span class="label">Coverage</span><span class="value">16 Key Stops</span>
+                    </div>
+                    <div class="stat-pill"><span class="label">Mode</span><span class="value">Live Tracking</span></div>
+                    <div class="stat-pill"><span class="label">Engine</span><span class="value">Route
+                            Intelligence</span></div>
+                </div>
+
+                <div class="click-hint">
+                    <span>Tap anywhere to launch</span>
+                    <div class="hint-arrow">↓</div>
+                </div>
+            </div>
+            
+            <div class="landing-footer">
+                <button onclick="event.stopPropagation(); showContact()">Contact Us</button>
+                <button onclick="event.stopPropagation(); showAbout()">System Info</button>
+                <button onclick="event.stopPropagation(); window.open('https://github.com', '_blank')">GitHub</button>
+            </div>
+        </section>
+
+        <section id="search-view" class="slide slide-bottom">
+            <div class="search-panel">
+                <h2>Plan Your Journey</h2>
+                <div class="field">
+                    <label>📍 From</label>
+                    <input type="text" id="from" placeholder="Enter starting point">
+                </div>
+                <div class="swap-container">
+                    <button class="swap-btn" onclick="swapStops()">⇅</button>
+                </div>
+                <div class="field">
+                    <label>🏁 To</label>
+                    <input type="text" id="to" placeholder="Enter destination">
+                </div>
+                <div class="field travel-time-toggle">
+                    <label>Travel Time</label>
+                    <div class="toggle-group">
+                        <input type="radio" id="live-now" name="travelType" value="Live" checked
+                            onchange="toggleTimeInput()">
+                        <label for="live-now">Live (Now)</label>
+                        <input type="radio" id="schedule-later" name="travelType" value="Later"
+                            onchange="toggleTimeInput()">
+                        <label for="schedule-later">Schedule for Later</label>
+                    </div>
+                </div>
+                <div class="field hidden" id="time-field-container">
+                    <label>⏰ Scheduled Time</label>
+                    <input type="time" id="time">
+                </div>
+                <button onclick="searchBus()">Search Bus</button>
+            </div>
+        </section>
+
+        <section id="results-view" class="slide slide-right">
+            <div class="results-layout">
+                <section id="results-section">
+                    <div class="results-head">
+                        <h2>Available Buses</h2>
+                        <div class="results-actions">
+                            <button type="button" id="new-search-btn">New Search</button>
+                            <button type="button" id="clear-map-btn">Clear Tracking</button>
+                        </div>
+                    </div>
+                    <div id="loader" class="loader hidden">Searching buses...</div>
+                    <div id="results"></div>
+                </section>
+
+                <section id="map-section">
+                    <div class="map-header">
+                        <h2>Live Bus Map</h2>
+                        <button id="theme-toggle" onclick="toggleMapTheme()">🌞 Outdoor Mode</button>
+                    </div>
+                    <div id="map"></div>
+                </section>
+            </div>
+        </section>
+
+        <button id="ai-assistant-btn" type="button" title="Open AI Assistant">AI Assistant</button>
+        <div id="ai-chat-window" class="hidden">
+            <div class="ai-chat-header">
+                <h3>Transit AI</h3>
+                <button id="ai-chat-close" type="button">×</button>
+            </div>
+            <div id="ai-chat-messages" class="ai-chat-messages">
+                <div class="ai-msg ai">Ask me which bus to take, and I can start tracking automatically.</div>
+            </div>
+            <form id="ai-chat-form" class="ai-chat-form">
+                <input id="ai-chat-input" type="text" placeholder="Ask about routes, buses, timings..."
+                    autocomplete="off" />
+                <button type="submit">Send</button>
+            </form>
+        </div>
+
+        <section id="contact-view" class="slide slide-bottom">
+            <div class="search-panel">
+                <button class="back-btn" onclick="showLanding()">← Return</button>
+                <h2>Contact Access</h2>
+                <div class="field">
+                    <label>Name</label>
+                    <input type="text" placeholder="Identify yourself">
+                </div>
+                <div class="field">
+                    <label>Signal Node (Email)</label>
+                    <input type="email" placeholder="Your comm channel">
+                </div>
+                <div class="field" style="margin-bottom: 15px;">
+                    <label>Message Content</label>
+                    <textarea placeholder="Enter coordinates or message..." rows="4" style="width: 100%; padding: 16px 20px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; color: #fff; font-size: 1rem; font-family: inherit; font-weight: 500; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3); resize: vertical; outline: none; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);"></textarea>
+                </div>
+                <button class="transmit-btn">Transmit Message</button>
+            </div>
+        </section>
+
+        <section id="about-view" class="slide slide-bottom">
+            <div class="search-panel">
+                <button class="back-btn" onclick="showLanding()">← Return</button>
+                <h2>System Overview</h2>
+                <div class="field">
+                    <ul style="color: rgba(255,255,255,0.8); line-height: 1.8; list-style: none; padding: 0;">
+                        <li><strong>Engine:</strong> Node.js Backend</li>
+                        <li><strong>Database:</strong> MongoDB & GTFS</li>
+                        <li><strong>AI Core:</strong> Groq LLM API</li>
+                        <li><strong>Mapping:</strong> Leaflet + OSRM</li>
+                        <li><strong>3D Env:</strong> Spline 3D</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </div><!-- /#app-shell -->
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        function toggleTimeInput() {
+            const isLater = document.getElementById("schedule-later").checked;
+            const timeContainer = document.getElementById("time-field-container");
+            if (isLater) {
+                timeContainer.classList.remove("hidden");
+            } else {
+                timeContainer.classList.add("hidden");
+            }
+        }
+    </script>
+    <script src="script.js"></script>
+
+</body>
+
+</html>

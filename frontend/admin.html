@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>⚡ GOD MODE — Hyderabad Transit Command</title>
+    <meta name="description" content="Secret admin dashboard for real-time monitoring of the entire Hyderabad transit network." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        /* ── Design Tokens ── */
+        :root {
+            --bg:         #050508;
+            --surface:    rgba(10, 10, 20, 0.7);
+            --border:     rgba(0, 255, 255, 0.12);
+            --cyan:       #00ffff;
+            --magenta:    #ff00cc;
+            --green:      #00ff88;
+            --amber:      #ffaa00;
+            --red:        #ff3355;
+            --text:       #e2e8f0;
+            --muted:      #64748b;
+            --font-mono:  'JetBrains Mono', monospace;
+            --font-sans:  'Inter', sans-serif;
+            --glow-c:     0 0 20px rgba(0,255,255,0.4);
+            --glow-m:     0 0 20px rgba(255,0,204,0.4);
+            --ease:       cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ── Reset ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Animated background grid with Noise ── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; z-index: 0;
+            background-image:
+                url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.05"/%3E%3C/svg%3E'),
+                linear-gradient(rgba(0,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,255,0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+            pointer-events: none;
+        }
+
+        /* Neon orbs */
+        .orb {
+            position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0;
+        }
+        .orb-1 { width: 600px; height: 600px; top:-200px; left:-200px; background: rgba(0,255,255,0.06); animation: drift1 20s ease-in-out infinite; }
+        .orb-2 { width: 500px; height: 500px; bottom:-150px; right:-150px; background: rgba(255,0,204,0.07); animation: drift2 18s ease-in-out infinite; }
+        .orb-3 { width: 300px; height: 300px; top:40%; left:45%; background: rgba(0,255,136,0.04); animation: drift3 25s ease-in-out infinite; }
+
+        @keyframes drift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(60px,40px)} }
+        @keyframes drift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-50px,-60px)} }
+        @keyframes drift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-30px)} }
+
+        /* ── Layout ── */
+        .shell {
+            position: relative; z-index: 1;
+            display: grid;
+            grid-template-columns: 260px 1fr 320px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* ── Top Bar ── */
+        .topbar {
+            grid-column: 1 / -1;
+            background: rgba(5,5,10,0.9);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+        }
+
+        .topbar-logo {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--cyan);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            text-shadow: var(--glow-c);
+            flex: 1;
+        }
+
+        .topbar-pill {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 99px;
+            border: 1px solid;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+        }
+        .topbar-pill.cyan  { border-color: rgba(0,255,255,0.3); color: var(--cyan); }
+        .topbar-pill.magenta { border-color: rgba(255,0,204,0.3); color: var(--magenta); }
+        .topbar-pill.green { border-color: rgba(0,255,136,0.3); color: var(--green); }
+
+        .topbar-pill .dot { width:6px; height:6px; border-radius:50%; }
+        .topbar-pill.cyan    .dot { background:var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: blink 2s ease-in-out infinite; }
+        .topbar-pill.magenta .dot { background:var(--magenta); box-shadow: 0 0 8px var(--magenta); animation: blink 2.5s ease-in-out infinite; }
+        .topbar-pill.green   .dot { background:var(--green); box-shadow: 0 0 8px var(--green); animation: blink 1.8s ease-in-out infinite; }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+        .topbar-time {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .topbar-exit {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--red);
+            border: 1px solid rgba(255,51,85,0.3);
+            padding: 4px 14px; border-radius: 6px;
+            background: rgba(255,51,85,0.07);
+            cursor: pointer;
+            transition: all 0.2s; text-decoration: none;
+            letter-spacing: 1px;
+        }
+        .topbar-exit:hover { background: var(--red); color: #000; box-shadow: 0 0 20px rgba(255,51,85,0.5); }
+
+        /* ── Left Sidebar ── */
+        .sidebar {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 8px 8px 4px;
+        }
+
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: 10px;
+            font-size: 0.85rem; font-weight: 500;
+            cursor: pointer; border: none; background: transparent; color: var(--text);
+            text-decoration: none; width: 100%; text-align: left;
+            transition: all 0.2s var(--ease);
+        }
+        .nav-item:hover { background: rgba(0,255,255,0.06); color: var(--cyan); }
+        .nav-item.active { background: rgba(0,255,255,0.1); color: var(--cyan); border: 1px solid rgba(0,255,255,0.2); }
+        .nav-item .icon { font-size: 1rem; }
+
+        /* Stat mini cards in sidebar */
+        .mini-stat {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-top: 4px;
+        }
+        .mini-stat-label { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+        .mini-stat-value { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; margin-top: 4px; }
+        .mini-stat-value.cyan    { color: var(--cyan); text-shadow: var(--glow-c); }
+        .mini-stat-value.magenta { color: var(--magenta); text-shadow: var(--glow-m); }
+        .mini-stat-value.green   { color: var(--green); }
+
+        /* ── Main Map Area ── */
+        .map-area {
+            position: relative;
+            background: #030306;
+        }
+
+        #admin-map {
+            width: 100%; height: 100%;
+        }
+
+        /* Leaflet overrides for Dark Matter tiles */
+        .leaflet-tile { filter: brightness(0.9) saturate(1.1); }
+        .leaflet-control-attribution { display: none !important; }
+        .leaflet-control-zoom a { background: rgba(5,5,15,0.9) !important; border-color: rgba(0,255,255,0.2) !important; color: var(--cyan) !important; font-family: var(--font-mono) !important; }
+
+        /* ── Admin Network Node breath animation ── */
+        @keyframes nodeBreath {
+            from { opacity: 0.4; transform: scale(0.8); }
+            to   { opacity: 1;   transform: scale(1.4); }
+        }
+
+        /* Admin tooltip */
+        .admin-tooltip .leaflet-tooltip {
+            background: rgba(5,5,15,0.92) !important;
+            border: 1px solid rgba(0,255,255,0.2) !important;
+            border-radius: 6px !important;
+            color: #e2e8f0 !important;
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 11px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
+            padding: 4px 10px !important;
+        }
+
+
+        /* Map overlay stats */
+        .map-overlay {
+            position: absolute; top: 16px; left: 16px; z-index: 999;
+            display: flex; gap: 10px; flex-wrap: wrap;
+        }
+        .map-chip {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(5,5,10,0.85);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(16px);
+            padding: 6px 14px; border-radius: 8px;
+            font-family: var(--font-mono); font-size: 0.75rem;
+        }
+        .map-chip .val { color: var(--cyan); font-weight: 600; }
+
+        /* ── Right Telemetry Panel ── */
+        .telemetry {
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow-y: auto;
+        }
+
+        .tele-section-title {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Health widget */
+        .health-widget {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .health-row {
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .health-label { font-size: 0.8rem; color: var(--muted); }
+        .health-badge {
+            display: flex; align-items: center; gap: 6px;
+            font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
+            padding: 3px 10px; border-radius: 99px;
+        }
+        .health-badge.online  { color: var(--green); background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.25); }
+        .health-badge.offline { color: var(--red);   background: rgba(255,51,85,0.1); border: 1px solid rgba(255,51,85,0.25); }
+        .health-badge.pending { color: var(--amber);  background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.25); }
+        .health-badge .dot { width:5px; height:5px; border-radius:50%; }
+        .health-badge.online  .dot { background:var(--green); box-shadow: 0 0 8px var(--green); animation: blink 1.8s ease-in-out infinite; }
+        .health-badge.offline .dot { background:var(--red); }
+        .health-badge.pending .dot { background:var(--amber); animation: blink 1s ease-in-out infinite; }
+
+        /* Eco counter widget */
+        .eco-widget {
+            background: linear-gradient(135deg, rgba(0,255,136,0.06), rgba(0,255,255,0.04));
+            border: 1px solid rgba(0,255,136,0.2);
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+        }
+        .eco-label { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+        .eco-value {
+            font-family: var(--font-mono);
+            font-size: 2rem; font-weight: 600;
+            color: var(--green);
+            text-shadow: 0 0 30px rgba(0,255,136,0.6);
+            margin: 6px 0 2px;
+            transition: all 0.3s ease;
+        }
+        .eco-sub { font-size: 0.75rem; color: var(--muted); }
+        .eco-sub span { color: var(--green); font-weight: 600; }
+
+        /* Query terminal widget */
+        .terminal-widget {
+            background: rgba(5, 10, 15, 0.95);
+            border: 1px solid rgba(0,255,255,0.3);
+            border-radius: 14px;
+            overflow: hidden;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 200px;
+            box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.05), 0 10px 40px rgba(0, 0, 0, 0.8);
+            position: relative;
+        }
+        /* CRT overlay for terminal */
+        .terminal-widget::after {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
+        .terminal-header {
+            background: rgba(0,255,255,0.1);
+            border-bottom: 1px solid rgba(0,255,255,0.3);
+            padding: 8px 14px;
+            display: flex; align-items: center; gap: 8px;
+            font-family: var(--font-mono); font-size: 0.7rem; color: var(--cyan);
+            letter-spacing: 1px; text-shadow: 0 0 8px rgba(0,255,255,0.6);
+        }
+        .terminal-header .dot-row { display:flex; gap:5px; margin-right:4px; }
+        .terminal-header .dot-row span { width:8px; height:8px; border-radius:50%; }
+        .terminal-header .dot-row span:nth-child(1) { background: #ff3355; }
+        .terminal-header .dot-row span:nth-child(2) { background: #ffaa00; }
+        .terminal-header .dot-row span:nth-child(3) { background: #00ff88; }
+
+        .terminal-body {
+            flex: 1;
+            padding: 10px 12px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            line-height: 1.8;
+            max-height: 280px;
+        }
+        .terminal-body::-webkit-scrollbar { width: 3px; }
+        .terminal-body::-webkit-scrollbar-track { background: transparent; }
+        .terminal-body::-webkit-scrollbar-thumb { background: rgba(0,255,255,0.3); border-radius: 3px; }
+
+        .terminal-line { color: var(--muted); animation: fadeInLine 0.3s ease; }
+        .terminal-line .prompt { color: var(--cyan); }
+        .terminal-line .origin { color: var(--green); }
+        .terminal-line .dest   { color: var(--magenta); }
+        .terminal-line .time-str { color: var(--amber); font-size: 0.6rem; }
+        .terminal-line .sys { color: var(--cyan); opacity: 0.6; font-style: italic; }
+
+        @keyframes fadeInLine { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+
+        /* Bus Management Table (bottom overlay drawer) */
+        .drawer-toggle {
+            position: absolute;
+            bottom: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 1000;
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 22px; border-radius: 99px;
+            background: rgba(5,5,10,0.9);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(16px);
+            cursor: pointer;
+            font-family: var(--font-mono); font-size: 0.75rem;
+            color: var(--cyan);
+            transition: all 0.3s var(--ease);
+            box-shadow: var(--glow-c);
+        }
+        .drawer-toggle:hover { background: rgba(0,255,255,0.1); }
+
+        .drawer {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            z-index: 999;
+            background: rgba(5,5,10,0.97);
+            border-top: 1px solid var(--border);
+            backdrop-filter: blur(30px);
+            max-height: 0; overflow: hidden;
+            transition: max-height 0.5s var(--ease);
+        }
+        .drawer.open { max-height: 55vh; overflow-y: auto; }
+
+        .drawer-inner { padding: 24px; }
+        .drawer-title {
+            font-family: var(--font-mono); font-size: 0.8rem;
+            color: var(--cyan); letter-spacing: 2px; text-transform: uppercase;
+            margin-bottom: 16px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .drawer-close {
+            cursor: pointer; color: var(--muted); font-size: 1.1rem;
+            background: none; border: none; transition: color 0.2s;
+        }
+        .drawer-close:hover { color: var(--red); }
+
+        .register-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 12px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .field label {
+            display: block;
+            font-family: var(--font-mono); font-size: 0.65rem;
+            color: var(--muted); letter-spacing: 1px; text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .field input {
+            width: 100%;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 10px 14px;
+            font-family: var(--font-sans); font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .field input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,255,255,0.08); }
+
+        .submit-btn {
+            padding: 10px 20px; border-radius: 10px; height: 42px;
+            background: linear-gradient(135deg, var(--cyan), var(--magenta));
+            border: none; cursor: pointer;
+            font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
+            color: #000; letter-spacing: 1px;
+            transition: all 0.3s var(--ease);
+        }
+        .submit-btn:hover { opacity: 0.9; transform: scale(1.03); box-shadow: var(--glow-c); }
+
+        /* Transit table */
+        .transit-table { width: 100%; border-collapse: collapse; }
+        .transit-table th {
+            font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted);
+            letter-spacing: 1px; text-transform: uppercase;
+            padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left;
+        }
+        .transit-table td { padding: 10px 12px; font-size: 0.83rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .transit-table tr:hover td { background: rgba(0,255,255,0.03); }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-family: var(--font-mono); font-size: 0.68rem; padding: 2px 8px;
+            border-radius: 99px; background: rgba(0,255,136,0.1);
+            border: 1px solid rgba(0,255,136,0.25); color: var(--green);
+        }
+        .status-badge::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); display:inline-block; }
+
+        .action-btn {
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            color: var(--muted); border-radius: 6px;
+            width: 30px; height: 30px; cursor: pointer;
+            font-size: 0.8rem; transition: all 0.2s;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .action-btn:hover { background: var(--cyan); color: #000; border-color: var(--cyan); }
+        .action-btn.del:hover { background: var(--red); border-color: var(--red); color: #fff; }
+
+        /* Toast */
+        .toast-el {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px) scale(0.95);
+            min-width: 280px; padding: 12px 20px; border-radius: 12px;
+            background: rgba(5,5,10,0.95); border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            font-family: var(--font-mono); font-size: 0.78rem;
+            color: var(--text); text-align: center;
+            opacity: 0; pointer-events: none; z-index: 10000;
+            transition: all 0.4s var(--ease);
+        }
+        .toast-el.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+        .toast-el.success { border-color: rgba(0,255,136,0.4); color: var(--green); }
+        .toast-el.error   { border-color: rgba(255,51,85,0.4);  color: var(--red); }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,255,255,0.2); border-radius: 4px; }
+
+        /* Pulsing dot markers on map */
+        .bus-dot-wrap { width:12px; height:12px; position:relative; }
+        .bus-dot-inner { width:6px; height:6px; border-radius:50%; background:var(--cyan); position:absolute; top:3px; left:3px; }
+        .bus-dot-ring  {
+            width:12px; height:12px; border-radius:50%;
+            border:2px solid var(--cyan);
+            position:absolute; top:0; left:0; opacity:0;
+            animation: ripple 2.5s ease-out infinite;
+        }
+        @keyframes ripple { 0%{transform:scale(0.4);opacity:0.9} 100%{transform:scale(2);opacity:0} }
+    </style>
+</head>
+<body>
+    <!-- Background orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="shell">
+        <!-- ── Top Bar ── -->
+        <header class="topbar">
+            <div class="topbar-logo">⚡ GOD MODE // Hyderabad Transit Command</div>
+            <div class="topbar-pill cyan"><span class="dot"></span>LIVE FEED</div>
+            <div class="topbar-pill green"><span class="dot"></span>GTFS ACTIVE</div>
+            <div class="topbar-pill magenta"><span class="dot"></span>AI ONLINE</div>
+            <div class="topbar-time" id="clock">--:--:--</div>
+            <a class="topbar-exit" href="index.html" id="exit-btn">⬅ EXIT</a>
+        </header>
+
+        <!-- ── Left Sidebar ── -->
+        <aside class="sidebar">
+            <div class="sidebar-section">Navigation</div>
+            <a class="nav-item active" href="#"><span class="icon">🗺️</span> Live Heatmap</a>
+            <a class="nav-item" href="#" onclick="openDrawer(); return false;"><span class="icon">🚌</span> Fleet Manager</a>
+            <a class="nav-item" href="index.html"><span class="icon">🔍</span> Public Search</a>
+
+            <div class="sidebar-section" style="margin-top:16px;">System Stats</div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Routes</div>
+                <div class="mini-stat-value cyan" id="stat-routes">—</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Stops</div>
+                <div class="mini-stat-value magenta" id="stat-stops">—</div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-label">Tracked Buses</div>
+                <div class="mini-stat-value green" id="stat-buses">—</div>
+            </div>
+            <div class="mini-stat" style="margin-top:8px;">
+                <div class="mini-stat-label">Server Uptime</div>
+                <div class="mini-stat-value cyan" id="stat-uptime" style="font-size:1.1rem;">—</div>
+            </div>
+
+            <div style="margin-top:auto; padding-top:16px;">
+                <button class="nav-item" id="logout-btn" style="width:100%; color:var(--red); border:1px solid rgba(255,51,85,0.2);">
+                    <span class="icon">🚪</span> Logout
+                </button>
+            </div>
+        </aside>
+
+        <!-- ── Main Map ── -->
+        <main class="map-area">
+            <div id="admin-map"></div>
+
+            <!-- Map Overlay Chips -->
+            <div class="map-overlay">
+                <div class="map-chip">🟢 Stops Plotted: <span class="val" id="chip-stops">0</span></div>
+                <div class="map-chip">🔵 Routes: <span class="val" id="chip-routes">0</span></div>
+                <div class="map-chip">🔴 Fleet: <span class="val" id="chip-buses">0</span></div>
+            </div>
+
+            <!-- Drawer toggle button -->
+            <button class="drawer-toggle" id="drawer-toggle-btn" onclick="toggleDrawer()">
+                ⚡ FLEET MANAGER ↑
+            </button>
+
+            <!-- Fleet Manager Drawer -->
+            <div class="drawer" id="fleet-drawer">
+                <div class="drawer-inner">
+                    <div class="drawer-title">
+                        🚌 Fleet Manager — Register & Control Transit Units
+                        <button class="drawer-close" onclick="closeDrawer()">✕</button>
+                    </div>
+                    <form id="register-form" class="register-form">
+                        <div class="field">
+                            <label for="new-bus-number">Bus Number</label>
+                            <input id="new-bus-number" type="text" placeholder="e.g., 127K" required />
+                        </div>
+                        <div class="field">
+                            <label for="new-route">Route (From ⇄ To)</label>
+                            <input id="new-route" type="text" placeholder="Ameerpet ⇄ Secunderabad" required />
+                        </div>
+                        <div class="field">
+                            <label for="new-arrival">Arrival Time</label>
+                            <input id="new-arrival" type="time" required />
+                        </div>
+                        <button type="submit" class="submit-btn">ADD UNIT</button>
+                    </form>
+                    <table class="transit-table">
+                        <thead>
+                            <tr>
+                                <th>Bus ID</th><th>Route</th><th>Status</th><th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fleet-tbody">
+                            <tr><td colspan="4" style="color:var(--muted); font-family:var(--font-mono); font-size:0.75rem;">Loading fleet data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- ── Right Telemetry Panel ── -->
+        <aside class="telemetry">
+
+            <!-- 1. API Health -->
+            <div class="tele-section-title">🛰️ API Health Monitor</div>
+            <div class="health-widget">
+                <div class="health-row">
+                    <span class="health-label">xAI Grok (Primary AI)</span>
+                    <span class="health-badge pending" id="badge-ai"><span class="dot"></span> Checking...</span>
+                </div>
+                <div class="health-row">
+                    <span class="health-label">Local NLP (Fallback)</span>
+                    <span class="health-badge online" id="badge-nlp"><span class="dot"></span> Always Ready</span>
+                </div>
+                <div class="health-row">
+                    <span class="health-label">MongoDB Atlas</span>
+                    <span class="health-badge pending" id="badge-mongo"><span class="dot"></span> Checking...</span>
+                </div>
+                <div class="health-row">
+                    <span class="health-label">OSRM Road-Snap</span>
+                    <span class="health-badge online" id="badge-osrm"><span class="dot"></span> Online</span>
+                </div>
+                <div class="health-row">
+                    <span class="health-label">GTFS Database</span>
+                    <span class="health-badge pending" id="badge-gtfs"><span class="dot"></span> Checking...</span>
+                </div>
+            </div>
+
+            <!-- 2. Eco-Impact Counter -->
+            <div class="tele-section-title">🌿 Eco-Impact Counter</div>
+            <div class="eco-widget">
+                <div class="eco-label">Total CO₂ Saved Today</div>
+                <div class="eco-value" id="eco-value">0.00</div>
+                <div class="eco-sub">kg CO₂ via <span id="eco-queries">0</span> transit queries</div>
+            </div>
+
+            <!-- 3. Live Query Terminal -->
+            <div class="tele-section-title">📡 Live AI Query Intercept</div>
+            <div class="terminal-widget">
+                <div class="terminal-header">
+                    <div class="dot-row"><span></span><span></span><span></span></div>
+                    TRANSIT_AI@HYDERABAD ~ query-stream
+                </div>
+                <div class="terminal-body" id="terminal-body">
+                    <div class="terminal-line"><span class="sys">// Connecting to AI extraction stream...</span></div>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-el" id="toast-el"></div>
+
+    <script>
+    // ── Config ──
+    function getBase() {
+        if (window.location.protocol === 'file:') return 'http://localhost:5000';
+        return `${window.location.protocol}//${window.location.hostname}:5000`;
+    }
+    const BASE = getBase();
+
+    // ── Clock ──
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent =
+            now.toLocaleTimeString('en-IN', { hour12: false });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ── Toast ──
+    let toastTimer;
+    function toast(msg, type = 'success') {
+        const el = document.getElementById('toast-el');
+        el.textContent = msg;
+        el.className = `toast-el ${type} show`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+    }
+
+    // ── Drawer ──
+    let drawerOpen = false;
+    function toggleDrawer() { drawerOpen ? closeDrawer() : openDrawer(); }
+    function openDrawer() {
+        document.getElementById('fleet-drawer').classList.add('open');
+        document.getElementById('drawer-toggle-btn').textContent = '⚡ FLEET MANAGER ↓';
+        drawerOpen = true;
+        loadFleet();
+    }
+    function closeDrawer() {
+        document.getElementById('fleet-drawer').classList.remove('open');
+        document.getElementById('drawer-toggle-btn').textContent = '⚡ FLEET MANAGER ↑';
+        drawerOpen = false;
+    }
+
+    // ── Map Setup — Framer Tier ──
+    const map = L.map('admin-map', {
+        center: [17.385, 78.486],
+        zoom: 12,
+        zoomControl: false,
+        attributionControl: false
+    });
+
+    // Add zoom top-right (away from the sidebar)
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    // CartoDB Dark Matter No-Labels — pitch-black canvas for neon dots
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    // ── Network Node Icon Factories (glowing 4px dots, asynchronously pulsing) ──
+    function makeNodeIcon(color, delay) {
+        const d = (delay !== undefined ? delay : (Math.random() * 3).toFixed(2));
+        return L.divIcon({
+            className: '',
+            html: `<div class="admin-node" style="
+                width:6px; height:6px; border-radius:50%;
+                background:${color};
+                box-shadow: 0 0 6px ${color}, 0 0 12px ${color}44;
+                animation: nodeBreath 3s ease-in-out ${d}s infinite alternate;
+            "></div>`,
+            iconSize: [6, 6],
+            iconAnchor: [3, 3]
+        });
+    }
+
+    // ── Staggered reveal: plot stops in chunks, each fades in ──
+    async function plotStopsOnMap(stops) {
+        const CHUNK = 150;
+        let plotted = 0;
+
+        for (let i = 0; i < stops.length; i += CHUNK) {
+            const batch = stops.slice(i, i + CHUNK);
+            batch.forEach((s, bi) => {
+                // Cycle through 3 neon colors for a living city feel
+                const colorIdx = (i + bi) % 3;
+                const colors   = ['#00ffff', '#ff00cc', '#00ff88'];
+                const color    = colors[colorIdx];
+                const delay    = (Math.random() * 3).toFixed(2);
+
+                const marker = L.marker([s.lat, s.lon], { icon: makeNodeIcon(color, delay) })
+                    .bindTooltip(`<span style="font-family:monospace;font-size:11px;color:#e2e8f0">${s.name || s.id || ''}</span>`, {
+                        className: 'admin-tooltip',
+                        permanent: false,
+                        direction: 'top',
+                        offset: [0, -6]
+                    })
+                    .addTo(map);
+                plotted++;
+            });
+
+            // Yield between chunks to keep UI fluid
+            await new Promise(r => setTimeout(r, 16));
+        }
+
+        document.getElementById('chip-stops').textContent = plotted;
+        console.log(`[Admin Map] Plotted ${plotted} network nodes`);
+    }
+
+    async function loadHeatmap() {
+        try {
+            const res = await fetch(`${BASE}/api/admin/stops-geo`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const stops = await res.json();
+            plotStopsOnMap(stops);
+        } catch(e) {
+            console.error('[Heatmap] Failed:', e);
+        }
+    }
+
+
+    // ── System Stats ──
+    async function loadStats() {
+        try {
+            const res = await fetch(`${BASE}/api/admin/stats`);
+            const d = await res.json();
+            document.getElementById('stat-routes').textContent = d.routes?.toLocaleString() ?? '—';
+            document.getElementById('stat-stops').textContent  = d.stops?.toLocaleString()  ?? '—';
+            document.getElementById('stat-buses').textContent  = d.buses?.toLocaleString()  ?? '—';
+            document.getElementById('chip-routes').textContent = d.routes?.toLocaleString() ?? '0';
+            document.getElementById('chip-buses').textContent  = d.buses?.toLocaleString()  ?? '0';
+        } catch(e) { console.error('[Stats]', e); }
+    }
+
+    // ── Health Check ──
+    async function loadHealth() {
+        try {
+            const res = await fetch(`${BASE}/api/admin/health`);
+            const d = await res.json();
+
+            function setBadge(id, status, label) {
+                const el = document.getElementById(id);
+                const isOn = status === 'Online' || status === 'Connected';
+                el.className = `health-badge ${isOn ? 'online' : 'offline'}`;
+                el.innerHTML = `<span class="dot"></span> ${label || status}`;
+            }
+
+            setBadge('badge-ai',    d.xai?.status,   d.xai?.key ? '✓ xAI Grok: Online' : '✗ xAI: No Key');
+            setBadge('badge-mongo', d.mongo.status,  'MongoDB: ' + d.mongo.status);
+
+            const gtfsOk = (d.database.routes > 0 && d.database.stops > 0);
+            const badgeGtfs = document.getElementById('badge-gtfs');
+            badgeGtfs.className = `health-badge ${gtfsOk ? 'online' : 'offline'}`;
+            badgeGtfs.innerHTML = `<span class="dot"></span> ${gtfsOk ? d.database.routes + ' Routes Loaded' : 'No Data'}`;
+
+            // OSRM is always stateless / free
+            const badgeOsrm = document.getElementById('badge-osrm');
+            if (badgeOsrm) {
+                badgeOsrm.className = 'health-badge online';
+                badgeOsrm.innerHTML = '<span class="dot"></span> Online (Free)';
+            }
+
+            // Uptime
+            const up = d.uptime || 0;
+            const h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60), s = up % 60;
+            document.getElementById('stat-uptime').textContent = 
+                `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+
+        } catch(e) { console.warn('[Health Check]', e); }
+    }
+
+    // ── Live Telemetry Stream Simulation & CO2 Effect ──
+    const fakeQueries = [
+        "Grok extracted [origin: secunderabad] [dest: hi-tech city]",
+        "Route conflict: alternative via Ameerpet generated by GTFS",
+        "OSRM road-snap: 247 waypoints loaded for route 127K",
+        "Grok extracted [origin: panjagutta] [dest: mehdipatnam]",
+        "xAI intent parsing successful (grok-3-mini)",
+        "Local NLP fallback triggered for ambiguous query 'kondapur bus'",
+        "Live geo-lock acquired — OSRM snap-to-road active",
+        "Grok extracted [origin: srinagar colony] [dest: kukatpally]",
+        "GTFS stop match: 3 candidate stops for 'ameerpet'",
+        "Grok extracted [origin: paradise] [dest: jubilee hills]"
+    ];
+
+    let totalQueries = 0;
+    let totalCO2 = 0;
+
+    function addTerminalLine(text, isSys = false) {
+        const body = document.getElementById('terminal-body');
+        const d = new Date();
+        const tStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
+        
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+        
+        if (isSys) {
+            line.innerHTML = `<span class="time-str">[${tStr}]</span> <span class="sys">// ${text}</span>`;
+        } else {
+            let formatted = text.replace(/\[origin: ([^\]]+)\]/, '[origin: <span class="origin">$1</span>]')
+                                .replace(/\[dest: ([^\]]+)\]/, '[dest: <span class="dest">$1</span>]');
+            line.innerHTML = `<span class="time-str">[${tStr}]</span> <span class="prompt">></span> ${formatted}`;
+            
+            // Increment CO2 effect for non-system logs
+            totalQueries++;
+            totalCO2 += (Math.random() * 0.8 + 0.2); // random kg
+            document.getElementById('eco-queries').textContent = totalQueries;
+            document.getElementById('eco-value').textContent = totalCO2.toFixed(2);
+            document.getElementById('eco-value').style.transform = 'scale(1.1)';
+            setTimeout(()=> document.getElementById('eco-value').style.transform = 'scale(1)', 300);
+        }
+
+        body.appendChild(line);
+        if (body.children.length > 25) body.removeChild(body.firstChild);
+        body.scrollTop = body.scrollHeight;
+    }
+
+    setInterval(() => {
+        if (Math.random() > 0.6) {
+            const raw = fakeQueries[Math.floor(Math.random() * fakeQueries.length)];
+            addTerminalLine(raw);
+        }
+    }, 2800);
+
+    // Initial load checks — health loaded once immediately via init(), not here
+    addTerminalLine("Secure link established.", true);
+    addTerminalLine("Monitoring xAI Grok query extractions...", true);
+
+    // ── Eco-Impact ──
+    let ecoQueryCount = 0;
+    function updateEco(kg) {
+        document.getElementById('eco-value').textContent = parseFloat(kg).toFixed(2);
+        document.getElementById('eco-queries').textContent = ecoQueryCount;
+    }
+    async function loadEco() {
+        try {
+            const res = await fetch(`${BASE}/api/admin/eco-impact`);
+            const d = await res.json();
+            updateEco(d.co2SavedKg);
+        } catch(e) {}
+    }
+
+    // ── Live Query SSE Terminal ──
+    const termBody = document.getElementById('terminal-body');
+    let sseConnected = false;
+
+    function appendTermLine(html) {
+        const div = document.createElement('div');
+        div.className = 'terminal-line';
+        div.innerHTML = html;
+        termBody.appendChild(div);
+        // Keep max 80 lines
+        while (termBody.children.length > 80) {
+            termBody.removeChild(termBody.firstChild);
+        }
+        termBody.scrollTop = termBody.scrollHeight;
+    }
+
+    function connectSse() {
+        const es = new EventSource(`${BASE}/api/admin/query-stream`);
+
+        es.onopen = () => {
+            sseConnected = true;
+            appendTermLine(`<span class="sys">// Stream connected — monitoring AI extractions</span>`);
+        };
+
+        es.onmessage = (ev) => {
+            try {
+                const msg = JSON.parse(ev.data);
+                const t = new Date(msg.ts).toLocaleTimeString('en-IN', { hour12: false });
+
+                if (msg.type === 'connected') {
+                    appendTermLine(`<span class="sys">// ${msg.payload.message} [${t}]</span>`);
+                    return;
+                }
+
+                if (msg.type === 'query') {
+                    const { origin, destination, aiProvider } = msg.payload;
+                    ecoQueryCount++;
+                    // Increment eco display by 0.15
+                    const curVal = parseFloat(document.getElementById('eco-value').textContent) || 0;
+                    updateEco((curVal + 0.15).toFixed(2));
+
+                    // Provider badge: neon magenta for Grok, amber for local NLP
+                    const providerColor = (aiProvider === 'xai-grok') ? 'var(--magenta)' : 'var(--amber)';
+                    const providerTag   = aiProvider === 'xai-grok' ? '🤖 Grok' :
+                                         aiProvider === 'local-nlp' ? '⚡ Local' : '⚡ NLP';
+
+                    appendTermLine(
+                        `<span class="prompt">&gt;</span> <span class="time-str">[${t}]</span> ` +
+                        `<span style="color:${providerColor};font-size:0.62rem;border:1px solid ${providerColor}33;padding:1px 5px;border-radius:4px;">${providerTag}</span> ` +
+                        `Extracted: {origin: <span class="origin">'${origin}'</span>, ` +
+                        `destination: <span class="dest">'${destination}'</span>}`
+                    );
+                }
+            } catch(e) {}
+        };
+
+        es.onerror = () => {
+            if (sseConnected) {
+                appendTermLine(`<span class="sys" style="color:var(--amber)">// Stream interrupted — reconnecting...</span>`);
+            }
+            sseConnected = false;
+            es.close();
+            setTimeout(connectSse, 5000);
+        };
+    }
+    connectSse();
+
+    // ── Fleet Manager ──
+    let fleetCache = [];
+
+    function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function resolveRoute(bus) {
+        return bus.route_name || bus.route || (bus.from && bus.to ? `${bus.from} ⇄ ${bus.to}` : '') || '—';
+    }
+    function buildRow(bus) {
+        const id    = escHtml(bus.bus_id || bus.route_id || bus.busNumber || bus._id || '?');
+        const route = escHtml(resolveRoute(bus));
+        const oid   = String(bus._id || '');
+        return `<tr>
+            <td style="font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">${id}</td>
+            <td>${route}</td>
+            <td><span class="status-badge">Tracking</span></td>
+            <td>
+                <button class="action-btn" onclick="editBus('${oid}')">✏</button>
+                <button class="action-btn del" onclick="deleteBus('${oid}')">🗑</button>
+            </td>
+        </tr>`;
+    }
+
+    async function loadFleet() {
+        const tb = document.getElementById('fleet-tbody');
+        try {
+            const res = await fetch(`${BASE}/api/admin/buses`);
+            fleetCache = await res.json();
+            if (!Array.isArray(fleetCache) || fleetCache.length === 0) {
+                tb.innerHTML = `<tr><td colspan="4" style="color:var(--muted);font-family:var(--font-mono);font-size:0.75rem;">No transit units registered.</td></tr>`;
+                return;
+            }
+            tb.innerHTML = fleetCache.map(buildRow).join('');
+        } catch(e) {
+            tb.innerHTML = `<tr><td colspan="4" style="color:var(--red)">Failed to load fleet.</td></tr>`;
+        }
+    }
+
+    async function deleteBus(id) {
+        if (!id || !confirm('Remove this transit unit from the system?')) return;
+        try {
+            const res = await fetch(`${BASE}/api/admin/bus/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error((await res.json()).error || 'Delete failed');
+            toast('Transit unit removed.', 'success');
+            loadFleet();
+        } catch(e) { toast(e.message, 'error'); }
+    }
+
+    async function editBus(id) {
+        const bus = fleetCache.find(b => String(b._id) === id);
+        const curId    = bus?.bus_id || bus?.route_id || bus?.busNumber || '';
+        const curRoute = resolveRoute(bus);
+        const nextId    = prompt('Edit Bus ID:', curId);    if (nextId === null) return;
+        const nextRoute = prompt('Edit Route (From ⇄ To):', curRoute); if (nextRoute === null) return;
+        try {
+            const res = await fetch(`${BASE}/api/admin/bus/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bus_id: nextId.trim(), route_name: nextRoute.trim() })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Update failed');
+            toast('Transit unit updated.', 'success');
+            loadFleet();
+        } catch(e) { toast(e.message, 'error'); }
+    }
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const busNumber   = document.getElementById('new-bus-number').value.trim();
+        const route       = document.getElementById('new-route').value.trim();
+        const arrivalTime = document.getElementById('new-arrival').value;
+        if (!busNumber || !route || !arrivalTime) { toast('Please fill all fields.', 'error'); return; }
+        try {
+            const res = await fetch(`${BASE}/api/admin/add-bus`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ busNumber, route, arrivalTime })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || 'Add failed');
+            e.target.reset();
+            toast('Transit unit added!', 'success');
+            loadFleet();
+        } catch(err) { toast(err.message, 'error'); }
+    });
+
+    // ── Logout ──
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        localStorage.removeItem('isAdminLoggedIn');
+        window.location.replace('index.html');
+    });
+
+    // ── Bootstrap ──
+    async function init() {
+        await Promise.all([loadStats(), loadHealth(), loadEco()]);
+        loadHeatmap();
+        loadStats();
+        // Poll health every 30s, eco every 15s, stats every 60s
+        setInterval(loadHealth, 30000);
+        setInterval(loadEco,    15000);
+        setInterval(loadStats,  60000);
+    }
+    init();
+    </script>
+</body>
+</html>

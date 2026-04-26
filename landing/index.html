@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hyderabad Transit App</title>
+    <!-- Spline 3D Viewer -->
+    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.0.18/build/spline-viewer.js"></script>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+  </head>
+  <body>
+    <!-- 3D Spline Background -->
+    <div class="spline-bg">
+        <spline-viewer scene="https://prod.spline.design/Slk6b8kz3LRlKiyk/scene.splinecode" loading-anim-type="spinner-small-dark"></spline-viewer>
+    </div>
+    
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
