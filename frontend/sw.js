@@ -4,7 +4,7 @@
 //  Ensures the app works offline after the first load.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'sentinel-transit-v2';
+const CACHE_NAME = 'sentinel-cache-v3';
 
 // Core shell files to pre-cache on install
 const SHELL_ASSETS = [

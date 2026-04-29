@@ -21,6 +21,9 @@ if (aiClient) {
 }
 
 const app = express();
+// SSE client registry for live query streaming
+const adminSseClients = new Set();
+let ecoImpactKg = 0; // Total CO2 saved today (kg)
 app.use(cors());
 app.use(express.json());
 
@@ -934,10 +937,6 @@ app.post('/api/chat', async (req, res) => {
 
 
 // ================= GOD MODE TELEMETRY =================
-
-// SSE client registry for live query streaming
-const adminSseClients = new Set();
-let ecoImpactKg = 0; // Total CO2 saved today (kg)
 
 // Broadcast a JSON event to all connected admin SSE clients
 function broadcastAdminEvent(type, payload) {
