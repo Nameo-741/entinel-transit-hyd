@@ -8,6 +8,14 @@
     <meta name="description"
         content="Track Hyderabad city buses in real-time. Plan your journey, find the fastest routes, and get AI-powered transit assistance.">
 
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050507">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sentinel Transit">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
     <!-- Sora Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +55,7 @@
             -webkit-user-select: text;
             -moz-user-select: text;
             user-select: text;
+            cursor: text;
         }
 
         /* ── 2. Static gradient base ──
@@ -214,13 +223,32 @@
 
         #landing.active .welcome-card { pointer-events: auto; }
 
-        button, input, label,
-        .bus-card, .ac-item, .swap-btn,
+        /* Interactive elements INSIDE active slides only */
+        .slide.active button,
+        .slide.active input,
+        .slide.active label,
+        .slide.active .bus-card,
+        .slide.active .ac-item,
+        .slide.active .swap-btn,
+        .slide.active .toggle-group label,
+        .slide.active .results-actions button,
+        .slide.active .welcome-card {
+            pointer-events: auto !important;
+        }
+
+        /* Global UI elements that live outside slides */
         #theme-toggle, #new-search-btn, #clear-map-btn,
         #ai-assistant-btn, #ai-chat-close, #ai-chat-form, #ai-chat-input,
-        .toggle-group label, .results-actions button,
-        .close-admin, .welcome-card {
+        .close-admin,
+        #sentinel-btn, #sentinel-info-panel, #sentinel-info-panel *,
+        #sos-toast, #sentinel-viewer-log, #sentinel-viewer-log *,
+        #sos-dir-btn, #sos-viewer-hud, #sos-viewer-hud * {
             pointer-events: auto !important;
+        }
+
+        /* Ensure hidden/inactive slides never capture clicks */
+        .slide:not(.active) {
+            pointer-events: none !important;
         }
 
         /* ── 8. Strong glassmorphism panels ──
@@ -475,7 +503,7 @@
                 <button id="ai-chat-close" type="button">×</button>
             </div>
             <div id="ai-chat-messages" class="ai-chat-messages">
-                <div class="ai-msg ai">Ask me which bus to take, and I can start tracking automatically.</div>
+                <div class="ai-msg ai">Ask me which bus to take, and I can start tracking automatically. I also control the <strong>🛡️ Sentinel Shield</strong> — say <strong>"activate shield"</strong> for emergency GPS protection.</div>
             </div>
             <form id="ai-chat-form" class="ai-chat-form">
                 <input id="ai-chat-input" type="text" placeholder="Ask about routes, buses, timings..."
@@ -520,9 +548,33 @@
             </div>
         </section>
 
+        <!-- SOS Read Receipt Toast -->
+        <div id="sos-toast" class="sos-toast hidden">👁️ SHIELD UPDATE: Someone is viewing your live location.</div>
+
+        <!-- Sentinel Viewer Activity Log -->
+        <div id="sentinel-viewer-log" class="hidden"></div>
+
+        <!-- Sentinel Shield FAB -->
+        <button id="sentinel-btn" class="glass-panel" onclick="toggleSentinelMode()" title="Activate Sentinel Shield">🛡️ Shield Off</button>
+
+        <!-- Sentinel Emergency Info Panel (hidden until GPS lock) -->
+        <div id="sentinel-info-panel" class="hidden"></div>
+
+        <!-- SOS Get Directions Button (hidden — shown only in SOS Viewer Mode) -->
+        <button id="sos-dir-btn" class="hidden">🗺️ Get Directions</button>
+
     </div><!-- /#app-shell -->
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+        // Fallback: if CDN blocked, try loading from local server
+        if (typeof io === 'undefined') {
+            const s = document.createElement('script');
+            s.src = 'http://localhost:5000/socket.io/socket.io.js';
+            document.head.appendChild(s);
+        }
+    </script>
     <script>
         function toggleTimeInput() {
             const isLater = document.getElementById("schedule-later").checked;
@@ -535,6 +587,17 @@
         }
     </script>
     <script src="script.js"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('[PWA] Service Worker registered, scope:', reg.scope))
+                    .catch(err => console.warn('[PWA] Service Worker registration failed:', err));
+            });
+        }
+    </script>
 
 </body>
 

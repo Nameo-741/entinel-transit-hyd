@@ -1565,3 +1565,839 @@ button[onclick="searchBus()"]:active {
 .leaflet-attribution-flag {
     display: none !important;
 }
+
+/* ================= SENTINEL SHIELD SYSTEM ================= */
+
+/* ── Floating Shield Button ── */
+#sentinel-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 11000;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-family: 'Sora', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(20, 20, 24, 0.55);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#sentinel-btn:hover {
+    transform: scale(1.05) translateY(-2px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Active (Armed) State ── */
+.sentinel-active-btn {
+    background: rgba(255, 0, 0, 0.3) !important;
+    border: 1px solid red !important;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.6) !important;
+    color: white !important;
+    animation: pulse-red 2s infinite !important;
+}
+
+/* ── Locating State (GPS acquiring) ── */
+.sentinel-locating {
+    background: rgba(255, 165, 0, 0.25) !important;
+    border-color: rgba(255, 165, 0, 0.6) !important;
+    box-shadow: 0 0 20px rgba(255, 165, 0, 0.4) !important;
+    animation: pulse-orange 1.5s ease-in-out infinite !important;
+}
+
+@keyframes pulse-orange {
+    0%   { transform: scale(1); box-shadow: 0 0 20px rgba(255, 165, 0, 0.4); }
+    50%  { transform: scale(1.03); box-shadow: 0 0 30px rgba(255, 165, 0, 0.6); }
+    100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 165, 0, 0.4); }
+}
+
+/* ── Locating Spinner ── */
+.sentinel-locating-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: sentinel-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes sentinel-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Body Emergency Glow Overlay ── */
+body.sentinel-mode {
+    box-shadow: inset 0 0 150px rgba(255, 0, 0, 0.15) !important;
+}
+
+/* ── Pulse-Red Keyframes ── */
+@keyframes pulse-red {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* ── Sentinel Toast Notification ── */
+.sentinel-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    z-index: 12000;
+    background: rgba(255, 0, 0, 0.15);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 60, 60, 0.4);
+    border-radius: 16px;
+    padding: 14px 28px;
+    color: #fff;
+    font-family: 'Sora', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    line-height: 1.5;
+    text-align: center;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(255, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+    opacity: 0;
+    animation: sentinel-toast-in 0.4s ease forwards, sentinel-toast-out 0.4s ease 3.6s forwards;
+}
+
+@keyframes sentinel-toast-in {
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes sentinel-toast-out {
+    to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+}
+
+/* ── Sentinel Neon-Red Route Polyline ── */
+.sentinel-route-line {
+    filter: drop-shadow(0 0 8px rgba(255, 50, 50, 0.9)) drop-shadow(0 0 20px rgba(255, 50, 50, 0.5)) !important;
+}
+
+/* ══════════════════════════════════════════════════════
+   SENTINEL GPS MARKER — Pulsing red dot on the map
+   ══════════════════════════════════════════════════════ */
+
+.sentinel-gps-icon {
+    background: none !important;
+    border: none !important;
+}
+
+.sentinel-gps-dot {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sentinel-gps-core {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ff3333;
+    border: 2.5px solid #fff;
+    box-shadow:
+        0 0 8px rgba(255, 50, 50, 0.9),
+        0 0 20px rgba(255, 50, 50, 0.5),
+        0 0 40px rgba(255, 50, 50, 0.2);
+    position: relative;
+    z-index: 3;
+}
+
+.sentinel-gps-ping {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 50, 50, 0.7);
+    animation: sentinel-ping 2s ease-out infinite;
+    z-index: 1;
+}
+
+.sentinel-gps-ping--delay {
+    animation-delay: 1s;
+    border-color: rgba(255, 50, 50, 0.4);
+}
+
+@keyframes sentinel-ping {
+    0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+/* GPS accuracy circle */
+.sentinel-accuracy-circle {
+    animation: sentinel-accuracy-pulse 3s ease-in-out infinite;
+}
+
+@keyframes sentinel-accuracy-pulse {
+    0%, 100% { opacity: 0.3; }
+    50%      { opacity: 0.5; }
+}
+
+/* ══════════════════════════════════════════════════════
+   SENTINEL EMERGENCY INFO PANEL
+   ══════════════════════════════════════════════════════ */
+
+#sentinel-info-panel {
+    position: fixed;
+    bottom: 70px;
+    left: 20px;
+    z-index: 11000;
+    width: 320px;
+    background: rgba(10, 0, 0, 0.75);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 50, 50, 0.3);
+    border-radius: 20px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.6),
+        0 0 30px rgba(255, 0, 0, 0.1),
+        inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    animation: sentinel-panel-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    font-family: 'Sora', sans-serif;
+}
+
+@keyframes sentinel-panel-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.sentinel-info-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    background: rgba(255, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(255, 50, 50, 0.2);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #ff6666;
+}
+
+.sentinel-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff3333;
+    box-shadow: 0 0 6px #ff3333, 0 0 12px #ff3333;
+    animation: sentinel-live-blink 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes sentinel-live-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}
+
+.sentinel-info-time {
+    margin-left: auto;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+}
+
+.sentinel-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    padding: 2px;
+    background: rgba(255, 50, 50, 0.05);
+}
+
+.sentinel-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 16px;
+    background: rgba(10, 0, 0, 0.5);
+}
+
+.sentinel-info-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255, 100, 100, 0.6);
+}
+
+.sentinel-info-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    letter-spacing: 0.5px;
+}
+
+.sentinel-maps-link {
+    display: block;
+    padding: 12px 18px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ff6666;
+    text-decoration: none;
+    background: rgba(255, 0, 0, 0.06);
+    border-top: 1px solid rgba(255, 50, 50, 0.15);
+    transition: all 0.3s ease;
+    letter-spacing: 0.3px;
+}
+
+.sentinel-maps-link:hover {
+    background: rgba(255, 0, 0, 0.15);
+    color: #fff;
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 800px) {
+    #sentinel-btn {
+        left: 16px;
+        bottom: 16px;
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+
+    #sentinel-info-panel {
+        left: 16px;
+        right: 16px;
+        bottom: 62px;
+        width: auto;
+    }
+
+    #sentinel-viewer-log {
+        right: 16px;
+        bottom: 62px;
+        width: auto;
+        left: 16px;
+    }
+
+    .sos-toast {
+        left: 16px;
+        right: 16px;
+        max-width: none;
+    }
+}
+
+/* ══════════════════════════════════════════════════════
+   SOS READ RECEIPT TOAST — "Someone is viewing your location"
+   ══════════════════════════════════════════════════════ */
+
+.sos-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    z-index: 13000;
+    max-width: 480px;
+    width: 90vw;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 24px;
+
+    background: rgba(0, 20, 0, 0.85);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1.5px solid rgba(0, 255, 80, 0.5);
+    border-radius: 18px;
+    box-shadow:
+        0 0 30px rgba(0, 255, 80, 0.25),
+        0 16px 48px rgba(0, 0, 0, 0.6),
+        inset 0 1px 1px rgba(0, 255, 80, 0.1);
+
+    font-family: 'Sora', sans-serif;
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sos-toast.show-toast {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    animation: sos-toast-glow 2s ease-in-out infinite;
+}
+
+@keyframes sos-toast-glow {
+    0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 80, 0.25), 0 16px 48px rgba(0, 0, 0, 0.6); }
+    50%      { box-shadow: 0 0 50px rgba(0, 255, 80, 0.4), 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 80px rgba(0, 255, 80, 0.15); }
+}
+
+.sos-toast-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 6px rgba(0, 255, 80, 0.5));
+}
+
+.sos-toast-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.sos-toast-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #00ff50;
+    text-shadow: 0 0 8px rgba(0, 255, 80, 0.5);
+}
+
+.sos-toast-detail {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ══════════════════════════════════════════════════════
+   SENTINEL VIEWER ACTIVITY LOG — Who opened the SOS link
+   ══════════════════════════════════════════════════════ */
+
+#sentinel-viewer-log {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    z-index: 11000;
+    width: 280px;
+    max-height: 300px;
+
+    background: rgba(0, 10, 0, 0.8);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(0, 255, 80, 0.25);
+    border-radius: 18px;
+    overflow: hidden;
+
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.6),
+        0 0 20px rgba(0, 255, 80, 0.08),
+        inset 0 1px 1px rgba(255, 255, 255, 0.03);
+    font-family: 'Sora', sans-serif;
+    animation: sentinel-panel-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.viewer-log-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(0, 255, 80, 0.08);
+    border-bottom: 1px solid rgba(0, 255, 80, 0.15);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #00ff50;
+}
+
+.viewer-log-count {
+    margin-left: auto;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 600;
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+}
+
+.viewer-log-entries {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.viewer-log-entries::-webkit-scrollbar {
+    width: 4px;
+}
+
+.viewer-log-entries::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 80, 0.2);
+    border-radius: 4px;
+}
+
+.viewer-log-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    animation: viewer-entry-in 0.3s ease forwards;
+}
+
+@keyframes viewer-entry-in {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.viewer-log-num {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: rgba(0, 255, 80, 0.5);
+    font-family: 'Courier New', Courier, monospace;
+    min-width: 24px;
+}
+
+.viewer-log-time {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    flex: 1;
+}
+
+.viewer-log-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #00ff50;
+    background: rgba(0, 255, 80, 0.1);
+    border: 1px solid rgba(0, 255, 80, 0.2);
+    border-radius: 10px;
+    padding: 3px 8px;
+    text-shadow: 0 0 6px rgba(0, 255, 80, 0.3);
+}
+
+/* ── Emergency Redirect Marker ── */
+.emergency-marker-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.emergency-ping {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 0, 0, 0.4);
+    border-radius: 50%;
+    animation: ping-red 1.5s infinite;
+}
+
+.emergency-center {
+    font-size: 32px;
+    z-index: 2;
+    filter: drop-shadow(0 0 10px red);
+    animation: emerge-shake 0.5s ease-out;
+}
+
+@keyframes ping-red {
+    0% { transform: scale(0.2); opacity: 1; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes emerge-shake {
+    0% { transform: scale(0); rotate(0deg); }
+    50% { transform: scale(1.2); rotate(10deg); }
+    100% { transform: scale(1); rotate(0deg); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   SOS VIEWER MODE — Fullscreen Emergency Map
+   When a friend opens the SOS link (?sos=true), the ENTIRE app
+   UI is stripped away. Only the live-updating map + an emergency
+   HUD bar remain. Maximum screen real-estate for the emergency.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Hide everything that isn't the map ── */
+body.sos-viewer-mode #results-section {
+    display: none !important;
+}
+
+body.sos-viewer-mode #ai-assistant-btn,
+body.sos-viewer-mode #ai-chat-window,
+body.sos-viewer-mode #sentinel-btn,
+body.sos-viewer-mode #sentinel-info-panel,
+body.sos-viewer-mode #sentinel-viewer-log,
+body.sos-viewer-mode #sos-toast {
+    display: none !important;
+}
+
+/* ── Expand the map to fill the viewport ── */
+body.sos-viewer-mode #map-section {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px;
+    height: calc(100vh - 48px);
+    border: 1px solid rgba(255, 50, 50, 0.2);
+    box-shadow:
+        0 0 40px rgba(255, 0, 0, 0.08),
+        inset 0 0 60px rgba(0, 0, 0, 0.3);
+}
+
+body.sos-viewer-mode .results-layout {
+    padding: 24px;
+    gap: 0;
+}
+
+/* ── Subtle red vignette around the viewport ── */
+body.sos-viewer-mode {
+    box-shadow: inset 0 0 120px rgba(255, 0, 0, 0.1) !important;
+}
+
+/* ── Emergency HUD Overlay Bar ── */
+#sos-viewer-hud {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 24px;
+    min-width: 380px;
+    max-width: 90vw;
+
+    background: rgba(10, 0, 0, 0.78);
+    backdrop-filter: blur(24px) saturate(200%);
+    -webkit-backdrop-filter: blur(24px) saturate(200%);
+    border: 1.5px solid rgba(255, 50, 50, 0.4);
+    border-radius: 16px;
+    box-shadow:
+        0 0 30px rgba(255, 0, 0, 0.2),
+        0 12px 40px rgba(0, 0, 0, 0.6),
+        inset 0 1px 1px rgba(255, 255, 255, 0.05);
+
+    font-family: 'Sora', sans-serif;
+    animation: sos-hud-slide-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sos-hud-slide-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.sos-hud-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.sos-hud-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff3333;
+    box-shadow: 0 0 8px #ff3333, 0 0 16px rgba(255, 50, 50, 0.5);
+    animation: sos-hud-pulse 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes sos-hud-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.8); }
+}
+
+.sos-hud-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #ff6666;
+    text-shadow: 0 0 8px rgba(255, 50, 50, 0.4);
+}
+
+.sos-hud-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.sos-hud-coords {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    letter-spacing: 0.5px;
+    transition: color 0.3s ease;
+}
+
+.sos-hud-gmaps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #ff8888;
+    text-decoration: none;
+    background: rgba(255, 0, 0, 0.08);
+    border: 1px solid rgba(255, 50, 50, 0.25);
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sos-hud-gmaps:hover {
+    background: rgba(255, 0, 0, 0.2);
+    color: #fff;
+    border-color: rgba(255, 50, 50, 0.5);
+    box-shadow: 0 0 12px rgba(255, 0, 0, 0.25);
+}
+
+/* ── Mobile: Edge-to-edge fullscreen emergency map ── */
+@media (max-width: 800px) {
+    body.sos-viewer-mode .results-layout {
+        padding: 0;
+    }
+
+    body.sos-viewer-mode #map-section {
+        border-radius: 0;
+        height: 100vh;
+        border: none;
+        box-shadow: none;
+    }
+
+    body.sos-viewer-mode .map-header {
+        display: none !important;
+    }
+
+    #sos-viewer-hud {
+        top: 10px;
+        min-width: unset;
+        width: calc(100vw - 24px);
+        padding: 10px 16px;
+        gap: 10px;
+        border-radius: 14px;
+    }
+
+    .sos-hud-coords {
+        font-size: 0.72rem;
+    }
+
+    .sos-hud-gmaps {
+        font-size: 0.68rem;
+        padding: 5px 10px;
+    }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   GET DIRECTIONS BUTTON — Floating CTA for SOS Viewer Mode
+   Opens native Google Maps with turn-by-turn navigation to
+   the sender's live location. Only visible in SOS Viewer Mode.
+   ══════════════════════════════════════════════════════════════ */
+
+#sos-dir-btn {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20000;
+
+    /* Google Maps blue — immediately recognisable intent */
+    background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+    color: #fff;
+    padding: 16px 36px;
+    border-radius: 99px;
+    font-weight: 800;
+    font-size: 1.1rem;
+    font-family: 'Sora', sans-serif;
+    letter-spacing: 0.3px;
+
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow:
+        0 8px 28px rgba(26, 115, 232, 0.5),
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    /* Entrance animation */
+    animation: sos-dir-enter 0.7s 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sos-dir-enter {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(30px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+#sos-dir-btn:hover {
+    transform: translateX(-50%) scale(1.06) translateY(-2px);
+    background: linear-gradient(135deg, #1557b0 0%, #0d47a1 100%);
+    box-shadow:
+        0 14px 40px rgba(26, 115, 232, 0.65),
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+#sos-dir-btn:active {
+    transform: translateX(-50%) scale(0.97);
+    box-shadow:
+        0 4px 16px rgba(26, 115, 232, 0.4),
+        0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Pulsing attention ring behind the button */
+#sos-dir-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 99px;
+    border: 2px solid rgba(26, 115, 232, 0.4);
+    animation: sos-dir-ring 2.5s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes sos-dir-ring {
+    0%   { transform: scale(1); opacity: 0.6; }
+    70%  { transform: scale(1.15); opacity: 0; }
+    100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* Only show the button when SOS Viewer Mode is active */
+body.sos-viewer-mode #sos-dir-btn {
+    display: block !important;
+}
+
+/* ── Mobile sizing ── */
+@media (max-width: 800px) {
+    #sos-dir-btn {
+        bottom: 24px;
+        padding: 14px 28px;
+        font-size: 1rem;
+        width: calc(100vw - 48px);
+        max-width: 360px;
+        text-align: center;
+    }
+}

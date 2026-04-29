@@ -13,6 +13,554 @@ tsParticles.load("tsparticles",{
 });
 */
 
+// ================= SENTINEL SHIELD — PROFESSIONAL GPS SOS SYSTEM =================
+// Set this to your Ngrok URL or deployed domain for production.
+// Leave empty ('') to auto-detect from window.location.origin or fall back to localhost.
+const PUBLIC_BASE_URL = 'https://payer-hyperlink-backstage.ngrok-free.dev';
+
+let isSentinelMode = false;
+let sentinelWatchId = null;          // Geolocation watchPosition ID
+let sentinelGpsMarker = null;        // Leaflet marker showing user's live location
+let sentinelGpsAccuracyCircle = null; // Accuracy radius circle
+let sentinelLastCoords = null;       // { lat, lon, accuracy, timestamp }
+let sentinelLocationHistory = [];    // Breadcrumb trail of coords
+let sosSessionId = null;             // Unique SOS session for Socket.io room
+let sosViewCount = 0;                // How many people opened the SOS link
+let sosViewers = [];                 // Viewer metadata log
+let hasSentWhatsapp = false;         // GPS warm-up gate: only fire WhatsApp once accuracy is good
+let sentinelWarmupId = null;         // watchPosition ID used during GPS warm-up phase
+let sentinelWarmupTimeout = null;    // Fallback timeout if GPS never reaches target accuracy
+
+// ================= SOCKET.IO — REAL-TIME SOS READ RECEIPTS =================
+// When opened from file://, io() defaults to connecting to file:// which fails.
+// Explicitly point to the server so Socket.io works regardless of how the page was opened.
+const _socketUrl = (window.location.protocol === 'file:') ? 'http://localhost:5000' : undefined;
+const socket = (typeof io !== 'undefined') ? io(_socketUrl) : null;
+
+if (socket) {
+    socket.on('connect', () => {
+        console.log('[Socket.io] Connected:', socket.id);
+        // Re-join SOS room if shield is active (handles reconnects)
+        if (sosSessionId && isSentinelMode) {
+            socket.emit('join_sos', sosSessionId);
+        }
+    });
+
+    // ── SOS READ RECEIPT: Someone opened the location link ──
+    socket.on('sos_viewed', (viewerInfo) => {
+        sosViewCount++;
+        sosViewers.push(viewerInfo);
+        console.log(`[SOS] 👁️ View #${sosViewCount} at ${viewerInfo.timeStr}`);
+
+        // 1. Show the read-receipt toast
+        showSosViewedToast(sosViewCount, viewerInfo);
+
+        // 2. Play alert sound
+        playSosAlertSound();
+
+        // 3. Update the viewer activity log panel
+        updateViewerLogPanel();
+
+        // 4. Post into the chatbot so the AI conversation has context
+        if (typeof appendAiMessage === 'function' && document.getElementById('ai-chat-messages')) {
+            const msg = document.createElement('div');
+            msg.className = 'ai-msg ai';
+            msg.innerHTML = `👁️ <strong>SOS Read Receipt</strong> — Someone opened your emergency location link at <strong>${viewerInfo.timeStr}</strong>. That's <strong>${sosViewCount}</strong> total view${sosViewCount > 1 ? 's' : ''}.`;
+            document.getElementById('ai-chat-messages').appendChild(msg);
+            document.getElementById('ai-chat-messages').scrollTop = document.getElementById('ai-chat-messages').scrollHeight;
+        }
+    });
+}
+
+/**
+ * Show a high-contrast read-receipt notification toast.
+ */
+function showSosViewedToast(count, viewer) {
+    const toast = document.getElementById('sos-toast');
+    if (!toast) return;
+
+    toast.innerHTML = `
+        <div class="sos-toast-icon">👁️</div>
+        <div class="sos-toast-body">
+            <div class="sos-toast-title">SHIELD UPDATE: Location Viewed</div>
+            <div class="sos-toast-detail">Someone opened your emergency link • View #${count} • ${viewer.timeStr}</div>
+        </div>
+    `;
+    toast.classList.remove('hidden');
+    toast.classList.add('show-toast');
+
+    // Auto-hide after 6 seconds
+    setTimeout(() => {
+        toast.classList.remove('show-toast');
+        setTimeout(() => toast.classList.add('hidden'), 500);
+    }, 6000);
+}
+
+/**
+ * Play a short alert sound for read receipts.
+ */
+function playSosAlertSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        // Two-tone alert: urgency ping
+        [520, 780].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(ctx.currentTime + i * 0.15);
+            osc.stop(ctx.currentTime + i * 0.15 + 0.3);
+        });
+    } catch (_) { /* Audio not available — silent fallback */ }
+}
+
+/**
+ * Update the viewer activity log panel with all viewer events.
+ */
+function updateViewerLogPanel() {
+    const panel = document.getElementById('sentinel-viewer-log');
+    if (!panel) return;
+
+    let viewerRows = sosViewers.map((v, i) => `
+        <div class="viewer-log-entry">
+            <span class="viewer-log-num">#${i + 1}</span>
+            <span class="viewer-log-time">${v.timeStr}</span>
+            <span class="viewer-log-badge">👁️ Viewed</span>
+        </div>
+    `).reverse().join('');
+
+    panel.innerHTML = `
+        <div class="viewer-log-header">
+            <span class="sentinel-live-dot"></span>
+            <span>SOS LINK ACTIVITY</span>
+            <span class="viewer-log-count">${sosViewCount} view${sosViewCount !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="viewer-log-entries">
+            ${viewerRows}
+        </div>
+    `;
+    panel.classList.remove('hidden');
+}
+
+/**
+ * Show a glassmorphism toast notification at the top of the viewport.
+ * Supports HTML content. Auto-removes itself after the given duration.
+ */
+function showSentinelToast(message, durationMs = 4200) {
+    const existing = document.querySelector('.sentinel-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = 'sentinel-toast';
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), durationMs);
+}
+
+/**
+ * Update the Sentinel Emergency Info Panel with live GPS data.
+ */
+function updateSentinelInfoPanel(lat, lon, accuracy, timestamp) {
+    const panel = document.getElementById('sentinel-info-panel');
+    if (!panel) return;
+
+    const time = new Date(timestamp).toLocaleTimeString('en-IN', { hour12: true });
+    const date = new Date(timestamp).toLocaleDateString('en-IN');
+    const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+
+    panel.innerHTML = `
+        <div class="sentinel-info-header">
+            <span class="sentinel-live-dot"></span>
+            <span>LIVE GPS TRACKING</span>
+            <span class="sentinel-info-time">${time}</span>
+        </div>
+        <div class="sentinel-info-grid">
+            <div class="sentinel-info-item">
+                <span class="sentinel-info-label">LAT</span>
+                <span class="sentinel-info-value">${lat.toFixed(6)}</span>
+            </div>
+            <div class="sentinel-info-item">
+                <span class="sentinel-info-label">LON</span>
+                <span class="sentinel-info-value">${lon.toFixed(6)}</span>
+            </div>
+            <div class="sentinel-info-item">
+                <span class="sentinel-info-label">ACCURACY</span>
+                <span class="sentinel-info-value">±${Math.round(accuracy)}m</span>
+            </div>
+            <div class="sentinel-info-item">
+                <span class="sentinel-info-label">DATE</span>
+                <span class="sentinel-info-value">${date}</span>
+            </div>
+        </div>
+        <a class="sentinel-maps-link" href="${mapsLink}" target="_blank" rel="noopener">
+            📍 Open in Google Maps
+        </a>
+    `;
+    panel.classList.remove('hidden');
+}
+
+/**
+ * Place (or move) the user's live GPS marker on the Leaflet map.
+ */
+function updateSentinelGpsMarker(lat, lon, accuracy) {
+    if (!map) return;
+
+    const latlng = [lat, lon];
+
+    if (!sentinelGpsMarker) {
+        // Create a pulsing user-location marker
+        sentinelGpsMarker = L.marker(latlng, {
+            icon: L.divIcon({
+                className: 'sentinel-gps-icon',
+                html: `<div class="sentinel-gps-dot">
+                           <div class="sentinel-gps-ping"></div>
+                           <div class="sentinel-gps-ping sentinel-gps-ping--delay"></div>
+                           <div class="sentinel-gps-core"></div>
+                       </div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            }),
+            zIndexOffset: 9999
+        }).addTo(map);
+
+        sentinelGpsAccuracyCircle = L.circle(latlng, {
+            radius: accuracy,
+            color: 'rgba(255, 50, 50, 0.4)',
+            fillColor: 'rgba(255, 50, 50, 0.08)',
+            fillOpacity: 0.4,
+            weight: 1,
+            dashArray: '4 6',
+            className: 'sentinel-accuracy-circle'
+        }).addTo(map);
+    } else {
+        sentinelGpsMarker.setLatLng(latlng);
+        sentinelGpsAccuracyCircle.setLatLng(latlng);
+        sentinelGpsAccuracyCircle.setRadius(accuracy);
+    }
+}
+
+/**
+ * Remove all Sentinel GPS layers from the map.
+ */
+function clearSentinelGpsLayers() {
+    if (sentinelGpsMarker && map) {
+        map.removeLayer(sentinelGpsMarker);
+        sentinelGpsMarker = null;
+    }
+    if (sentinelGpsAccuracyCircle && map) {
+        map.removeLayer(sentinelGpsAccuracyCircle);
+        sentinelGpsAccuracyCircle = null;
+    }
+}
+
+/**
+ * Fire the WhatsApp SOS with real GPS coordinates.
+ * Uses a "bouncer link" through our server so we can track when someone opens it.
+ */
+function fireSentinelSOS(lat, lon) {
+    // Generate session ID if not already created
+    if (!sosSessionId) {
+        sosSessionId = 'sos_' + Math.random().toString(36).substr(2, 9);
+        if (socket) socket.emit('join_sos', sosSessionId);
+    }
+
+    // Build the bouncer link that routes through our server
+    // Priority: PUBLIC_BASE_URL (Ngrok/deployed) → API_BASE_URL (auto-detect) → localhost fallback
+    const baseUrl = PUBLIC_BASE_URL || ((typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : 'http://localhost:5000');
+    const bouncerLink = `${baseUrl}/api/sos/view?id=${encodeURIComponent(sosSessionId)}&lat=${lat}&lon=${lon}`;
+
+    const timestamp = new Date().toLocaleString('en-IN');
+    const msg = `🚨 EMERGENCY: I am on a city bus. Follow my exact location on the Sentinel Transit Grid: ${bouncerLink}`;
+    window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
+}
+
+/**
+ * MASTER TOGGLE — Sentinel Shield mode on/off.
+ *
+ * State Machine:
+ *   OFF → click → LOCATING... (GPS acquiring) → GPS lock → SOS ARMED
+ *   ARMED → click → OFF (cleanup)
+ */
+function toggleSentinelMode() {
+    const btn = document.getElementById('sentinel-btn');
+
+    if (!isSentinelMode) {
+        // ══════════════════════════════════════
+        //  PHASE 1: ACTIVATE — Begin GPS Warm-Up
+        // ══════════════════════════════════════
+        isSentinelMode = true;
+        hasSentWhatsapp = false;
+        document.body.classList.add('sentinel-mode');
+
+        if (btn) {
+            btn.innerHTML = '<span class="sentinel-locating-spinner"></span> LOCATING...';
+            btn.classList.add('sentinel-active-btn', 'sentinel-locating');
+        }
+
+        // Re-colour any existing route line to emergency red
+        if (currentRouteLine) {
+            currentRouteLine.setStyle({ color: '#ff3333' });
+            const el = currentRouteLine.getElement && currentRouteLine.getElement();
+            if (el) {
+                el.classList.remove('neon-route-line');
+                el.classList.add('sentinel-route-line');
+            }
+        }
+
+        showSentinelToast('🛡️ Acquiring satellite GPS fix — calibrating...', 8000);
+
+        // ── Check geolocation support ──
+        if (!navigator.geolocation) {
+            alert('⚠️ Geolocation is not supported by your browser. Sentinel Shield requires GPS access.');
+            deactivateSentinel();
+            return;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  GPS WARM-UP FILTER — watchPosition streams location ticks.
+        //  We discard anything with accuracy > 30m (cell-tower guesses)
+        //  and only arm + fire WhatsApp once we get a satellite lock.
+        //  A 15-second fallback ensures we don't wait forever.
+        // ══════════════════════════════════════════════════════════════
+        const GPS_ACCURACY_THRESHOLD = 30; // metres — anything above is too sloppy
+        const GPS_WARMUP_TIMEOUT_MS  = 15000; // 15s fallback
+        let bestAccuracy = Infinity;       // track the tightest reading seen
+
+        // Join the SOS room early so read receipts work the instant we fire
+        if (!sosSessionId) {
+            sosSessionId = 'sos_' + Math.random().toString(36).substr(2, 9);
+        }
+        if (socket) socket.emit('join_sos', sosSessionId);
+
+        /**
+         * Called once accuracy is good enough (or the timeout fires).
+         * Arms the SOS, fires WhatsApp, and transitions to continuous tracking.
+         */
+        const armSentinel = (lat, lon, accuracy, timestamp) => {
+            if (hasSentWhatsapp) return; // already armed — ignore duplicate calls
+            hasSentWhatsapp = true;
+
+            // Clean up warm-up watcher (continuous tracking takes over)
+            if (sentinelWarmupId !== null) {
+                navigator.geolocation.clearWatch(sentinelWarmupId);
+                sentinelWarmupId = null;
+            }
+            if (sentinelWarmupTimeout) {
+                clearTimeout(sentinelWarmupTimeout);
+                sentinelWarmupTimeout = null;
+            }
+
+            sentinelLastCoords = { lat, lon, accuracy, timestamp };
+
+            // Arm the UI
+            if (btn) {
+                btn.classList.remove('sentinel-locating');
+                btn.innerHTML = '🚨 SOS ARMED';
+            }
+
+            // Fire WhatsApp SOS with high-accuracy coordinates
+            fireSentinelSOS(lat, lon);
+
+            // Update map + info panel
+            updateSentinelGpsMarker(lat, lon, accuracy);
+            updateSentinelInfoPanel(lat, lon, accuracy, timestamp);
+
+            // Emit to Socket.io so SOS viewers get the location
+            if (socket && sosSessionId) {
+                socket.emit('update_location', {
+                    sessionId: sosSessionId,
+                    lat, lon, accuracy,
+                    timestamp: Date.now()
+                });
+            }
+
+            // Start continuous tracking for ongoing position updates
+            startContinuousSentinelTracking();
+
+            showSentinelToast(`🛡️ SOS ARMED — Satellite Lock: ±${Math.round(accuracy)}m`);
+            console.log(`[Sentinel GPS] ✅ Armed with accuracy ±${Math.round(accuracy)}m`);
+        };
+
+        // ── WARM-UP: watchPosition streams ticks, we filter by accuracy ──
+        sentinelWarmupId = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude: lat, longitude: lon, accuracy } = position.coords;
+                const timestamp = position.timestamp;
+
+                console.log(`[Sentinel GPS] Warm-up tick — accuracy: ±${Math.round(accuracy)}m`);
+
+                // Always track the best reading in case we hit the timeout
+                if (accuracy < bestAccuracy) {
+                    bestAccuracy = accuracy;
+                    sentinelLastCoords = { lat, lon, accuracy, timestamp };
+                }
+
+                // ── ACCURACY FILTER ──
+                if (accuracy > GPS_ACCURACY_THRESHOLD) {
+                    // Still calibrating — sloppy cell-tower / Wi-Fi guess
+                    if (btn && !hasSentWhatsapp) {
+                        btn.innerHTML = `🚨 CALIBRATING (${Math.round(accuracy)}m)...`;
+                    }
+                    // Show the marker so user sees progress on the map
+                    updateSentinelGpsMarker(lat, lon, accuracy);
+                    return; // ← discard this tick, wait for better accuracy
+                }
+
+                // ── ACCURACY IS GOOD — arm the SOS ──
+                armSentinel(lat, lon, accuracy, timestamp);
+            },
+            (error) => {
+                console.error('[Sentinel GPS] Warm-up error:', error.message);
+                // If we have NO reading at all, abort entirely
+                if (!sentinelLastCoords) {
+                    alert(`⚠️ GPS Error: ${error.message}\nPlease ensure location permissions are enabled.`);
+                    deactivateSentinel();
+                }
+                // Otherwise the timeout fallback will use the best reading we got
+            },
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+        );
+
+        // ── FALLBACK TIMEOUT: if GPS never reaches threshold, use best reading ──
+        sentinelWarmupTimeout = setTimeout(() => {
+            if (hasSentWhatsapp) return; // Already armed — nothing to do
+
+            if (sentinelLastCoords) {
+                const { lat, lon, accuracy, timestamp } = sentinelLastCoords;
+                console.warn(`[Sentinel GPS] ⏱️ Warm-up timeout — arming with best accuracy: ±${Math.round(accuracy)}m`);
+                showSentinelToast(`🛡️ Timeout — using best fix: ±${Math.round(accuracy)}m`, 5000);
+                armSentinel(lat, lon, accuracy, timestamp);
+            } else {
+                console.error('[Sentinel GPS] ⏱️ Warm-up timeout — no GPS readings received.');
+                alert('⚠️ Could not acquire GPS position. Please try again in an open area.');
+                deactivateSentinel();
+            }
+        }, GPS_WARMUP_TIMEOUT_MS);
+
+    } else {
+        // ══════════════════════════════════════
+        //  PHASE 2: DEACTIVATE — Full Cleanup
+        // ══════════════════════════════════════
+
+        // If already armed and user taps again, fire another SOS with latest coords
+        if (sentinelLastCoords && !btn?.classList.contains('sentinel-locating')) {
+            const { lat, lon } = sentinelLastCoords;
+            const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+            const reSend = confirm(
+                `🚨 Sentinel Shield is currently ARMED.\n\n` +
+                `📍 Your last known location:\n${mapsLink}\n\n` +
+                `Tap OK to send another SOS via WhatsApp.\nTap Cancel to deactivate the shield.`
+            );
+            if (reSend) {
+                fireSentinelSOS(lat, lon);
+                return; // Stay armed
+            }
+        }
+
+        deactivateSentinel();
+    }
+}
+
+/**
+ * Full deactivation and cleanup of Sentinel Shield.
+ */
+function deactivateSentinel() {
+    isSentinelMode = false;
+    hasSentWhatsapp = false;
+    const btn = document.getElementById('sentinel-btn');
+
+    document.body.classList.remove('sentinel-mode');
+    if (btn) {
+        btn.innerHTML = '🛡️ Shield Off';
+        btn.classList.remove('sentinel-active-btn', 'sentinel-locating');
+    }
+
+    // Stop GPS warm-up watcher (if still calibrating)
+    if (sentinelWarmupId !== null) {
+        navigator.geolocation.clearWatch(sentinelWarmupId);
+        sentinelWarmupId = null;
+    }
+    if (sentinelWarmupTimeout) {
+        clearTimeout(sentinelWarmupTimeout);
+        sentinelWarmupTimeout = null;
+    }
+
+    // Stop continuous GPS watcher
+    if (sentinelWatchId !== null) {
+        navigator.geolocation.clearWatch(sentinelWatchId);
+        sentinelWatchId = null;
+    }
+
+    // Clear GPS map layers
+    clearSentinelGpsLayers();
+
+    // Hide info panel
+    const panel = document.getElementById('sentinel-info-panel');
+    if (panel) panel.classList.add('hidden');
+
+    // Reset coords
+    sentinelLastCoords = null;
+    sentinelLocationHistory = [];
+
+    // Reset SOS session
+    sosSessionId = null;
+    sosViewCount = 0;
+    sosViewers = [];
+    const viewerLog = document.getElementById('sentinel-viewer-log');
+    if (viewerLog) viewerLog.classList.add('hidden');
+    const sosToast = document.getElementById('sos-toast');
+    if (sosToast) { sosToast.classList.add('hidden'); sosToast.classList.remove('show-toast'); }
+
+    // Revert any existing route line to default cyan
+    if (currentRouteLine) {
+        currentRouteLine.setStyle({ color: '#00ffff' });
+        const el = currentRouteLine.getElement && currentRouteLine.getElement();
+        if (el) {
+            el.classList.remove('sentinel-route-line');
+            el.classList.add('neon-route-line');
+        }
+    }
+
+    showSentinelToast('🛡️ Sentinel Shield deactivated.');
+}
+
+/**
+ * Continuous GPS tracking — runs AFTER the warm-up phase arms the SOS.
+ * Streams location updates to the map, info panel, and Socket.io viewers.
+ */
+function startContinuousSentinelTracking() {
+    if (sentinelWatchId !== null) return; // Already tracking
+
+    sentinelWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const { latitude: lat, longitude: lon, accuracy } = position.coords;
+            const timestamp = position.timestamp;
+
+            sentinelLastCoords = { lat, lon, accuracy, timestamp };
+            sentinelLocationHistory.push({ lat, lon, accuracy, timestamp });
+
+            // Update map marker + info panel
+            updateSentinelGpsMarker(lat, lon, accuracy);
+            updateSentinelInfoPanel(lat, lon, accuracy, timestamp);
+
+            // Broadcast to SOS viewers via Socket.io
+            if (socket && sosSessionId) {
+                socket.emit('update_location', {
+                    sessionId: sosSessionId,
+                    lat, lon, accuracy,
+                    timestamp: Date.now()
+                });
+            }
+        },
+        (error) => {
+            console.warn('[Sentinel GPS] Continuous tracking error:', error.message);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+    );
+}
+
 // ================= VIEWS & SLIDES =================
 const landing = document.getElementById("landing");
 const searchView = document.getElementById("search-view");
@@ -493,12 +1041,17 @@ async function startLiveTracking(tripId, busNumber, from, to, travelType = 'Live
                 if (tripData.polyline && tripData.polyline.length > 0) {
                     route = tripData.polyline;
                     // Glowing neon polyline with draw animation
+                    let routeColor = isSentinelMode ? '#ff3333' : '#00ffff';
+                    let routeClass = isSentinelMode ? 'sentinel-route-line' : 'neon-route-line';
                     currentRouteLine = L.polyline(route, {
-                        color: '#00ffff',
+                        color: routeColor,
                         weight: 4,
                         opacity: 0.95,
-                        className: 'neon-route-line'
+                        className: routeClass
                     }).addTo(map);
+                    if (isSentinelMode) {
+                        showSentinelToast('🛡️ Sentinel Active: Routing via Primary Arterial Roads.');
+                    }
                     // Cinematic 'Drone' Fly-Over — buttery smooth camera swoop
                     map.flyToBounds(currentRouteLine.getBounds(), {
                         padding: [50, 50],
@@ -551,12 +1104,17 @@ async function startLiveTracking(tripId, busNumber, from, to, travelType = 'Live
 
         route = data.latlngs;
 
+        let fallbackRouteColor = isSentinelMode ? '#ff3333' : '#00ffff';
+        let fallbackRouteClass = isSentinelMode ? 'sentinel-route-line' : 'neon-route-line';
         currentRouteLine = L.polyline(route, {
-            color: '#00ffff',
+            color: fallbackRouteColor,
             weight: 4,
             opacity: 0.95,
-            className: 'neon-route-line'
+            className: fallbackRouteClass
         }).addTo(map);
+        if (isSentinelMode) {
+            showSentinelToast('🛡️ Sentinel Active: Routing via Primary Arterial Roads.');
+        }
         // Cinematic 'Drone' Fly-Over — buttery smooth camera swoop
         map.flyToBounds(currentRouteLine.getBounds(), {
             padding: [50, 50],
@@ -851,7 +1409,204 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resultsContainer) {
         observer.observe(resultsContainer, { childList: true, subtree: true });
     }
+
+    // ── Check for SOS Redirect ──
+    handleSosRedirect();
 });
+
+/**
+ * Start continuous hardware tracking after the initial getCurrentPosition fix.
+ * Each position update is:
+ *   1. Rendered on the sender's own map (marker + info panel)
+ *   2. Broadcast via Socket.io to every viewer in the SOS room
+ */
+function startContinuousSentinelTracking() {
+    if (sentinelWatchId) navigator.geolocation.clearWatch(sentinelWatchId);
+    
+    sentinelWatchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const { latitude: lat, longitude: lon, accuracy } = position.coords;
+            sentinelLastCoords = { lat, lon, accuracy, timestamp: position.timestamp };
+
+            // Update sender's own map
+            updateSentinelGpsMarker(lat, lon, accuracy);
+            updateSentinelInfoPanel(lat, lon, accuracy, position.timestamp);
+
+            // ── Broadcast live location to all viewers in the SOS room ──
+            if (socket && sosSessionId) {
+                socket.emit('update_location', {
+                    sessionId: sosSessionId,
+                    lat,
+                    lon,
+                    accuracy,
+                    timestamp: position.timestamp
+                });
+            }
+        },
+        (err) => {
+            console.warn('[Sentinel GPS Watch] Error:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 0 }
+    );
+}
+
+/**
+ * Check if the page was loaded from an SOS redirect link.
+ * If so, pan to coordinates, drop an animated emergency marker,
+ * then join the Socket.io room and listen for real-time location updates.
+ */
+function handleSosRedirect() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('sos') !== 'true') return;
+
+    const lat = parseFloat(urlParams.get('lat'));
+    const lon = parseFloat(urlParams.get('lon'));
+    const sosId = urlParams.get('id'); // session ID for socket room
+
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    // ══════════════════════════════════════════════════════════
+    //  SOS VIEWER MODE — Strip the entire UI down to a
+    //  fullscreen emergency map. No sidebars, no search,
+    //  no AI button. Just the live tracking map.
+    // ══════════════════════════════════════════════════════════
+    document.body.classList.add('sos-viewer-mode');
+    document.title = '🚨 LIVE — Emergency Location Tracking';
+
+    // ── Ensure map is initialised and visible ──
+    if (!map) window.initMap();
+
+    // Jump to results-view so the map is visible
+    const landing = document.getElementById('landing');
+    const searchView = document.getElementById('search-view');
+    const resultsView = document.getElementById('results-view');
+    if (landing) { landing.classList.remove('active'); landing.classList.add('slide-top'); }
+    if (searchView) { searchView.classList.remove('active'); searchView.classList.add('slide-bottom'); }
+    if (resultsView) { resultsView.classList.remove('slide-right'); resultsView.classList.add('active'); }
+
+    // ── Inject the emergency HUD overlay bar ──
+    const sosHud = document.createElement('div');
+    sosHud.id = 'sos-viewer-hud';
+    sosHud.innerHTML = `
+        <div class="sos-hud-left">
+            <span class="sos-hud-dot"></span>
+            <span class="sos-hud-label">LIVE TRACKING</span>
+        </div>
+        <div class="sos-hud-center">
+            <span class="sos-hud-coords" id="sos-hud-coords">${lat.toFixed(5)}, ${lon.toFixed(5)}</span>
+        </div>
+        <a class="sos-hud-gmaps" href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener" id="sos-hud-gmaps-link">
+            📍 Open in Google Maps
+        </a>
+    `;
+    document.body.appendChild(sosHud);
+
+    // Small delay to let the map container render before flying
+    setTimeout(() => {
+        if (map) map.invalidateSize();
+        map.flyTo([lat, lon], 16, { duration: 2.5 });
+    }, 300);
+
+    // ── Drop animated emergency marker ──
+    const emergencyIcon = L.divIcon({
+        className: 'emergency-marker-container',
+        html: `
+            <div class="emergency-ping"></div>
+            <div class="emergency-center">🚨</div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+
+    window.sosMarker = L.marker([lat, lon], { icon: emergencyIcon, zIndexOffset: 9999 })
+        .addTo(map)
+        .bindPopup(`
+            <div style="font-family: 'Sora', sans-serif;">
+                <h4 style="margin:0 0 5px; color:#ff3333;">🚨 LIVE EMERGENCY LOCATION</h4>
+                <p style="margin:0; font-size:0.85rem;">This position updates in real-time as they move.</p>
+            </div>
+        `)
+        .openPopup();
+
+    // ── Accuracy circle around the marker ──
+    window.sosAccuracyCircle = L.circle([lat, lon], {
+        radius: 50,
+        color: 'rgba(255, 50, 50, 0.4)',
+        fillColor: 'rgba(255, 50, 50, 0.08)',
+        fillOpacity: 0.4,
+        weight: 1,
+        dashArray: '4 6',
+        className: 'sentinel-accuracy-circle'
+    }).addTo(map);
+
+    // ── Breadcrumb trail polyline ──
+    window.sosBreadcrumb = L.polyline([[lat, lon]], {
+        color: '#ff3333',
+        weight: 3,
+        opacity: 0.6,
+        dashArray: '6 8',
+        className: 'sentinel-route-line'
+    }).addTo(map);
+
+    // ── Wire up the Get Directions button ──
+    // Track the latest known position (updates on every socket event)
+    window._sosLiveLat = lat;
+    window._sosLiveLon = lon;
+
+    const dirBtn = document.getElementById('sos-dir-btn');
+    if (dirBtn) {
+        dirBtn.classList.remove('hidden');
+        dirBtn.addEventListener('click', () => {
+            // Use Google Maps Directions intent URL — opens native navigation on mobile
+            const destLat = window._sosLiveLat;
+            const destLon = window._sosLiveLon;
+            window.open(
+                `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLon}&travelmode=driving`,
+                '_blank'
+            );
+        });
+    }
+
+    // ── Join the Socket.io room to receive live location updates ──
+    if (sosId && socket) {
+        socket.emit('join_sos', sosId);
+        console.log(`[SOS Viewer] Joined room "${sosId}" — listening for live updates...`);
+
+        socket.on('location_updated', (data) => {
+            const newLatLng = [data.lat, data.lon];
+            console.log(`[SOS Viewer] 📍 Live update: ${data.lat.toFixed(6)}, ${data.lon.toFixed(6)}`);
+
+            // Smoothly animate the marker to the new position
+            if (window.sosMarker) {
+                window.sosMarker.setLatLng(newLatLng);
+            }
+
+            // Update accuracy circle
+            if (window.sosAccuracyCircle) {
+                window.sosAccuracyCircle.setLatLng(newLatLng);
+                if (data.accuracy) window.sosAccuracyCircle.setRadius(data.accuracy);
+            }
+
+            // Extend the breadcrumb trail
+            if (window.sosBreadcrumb) {
+                window.sosBreadcrumb.addLatLng(newLatLng);
+            }
+
+            // Update the HUD bar with new coordinates
+            const hudCoords = document.getElementById('sos-hud-coords');
+            if (hudCoords) hudCoords.textContent = `${data.lat.toFixed(5)}, ${data.lon.toFixed(5)}`;
+            const hudGmaps = document.getElementById('sos-hud-gmaps-link');
+            if (hudGmaps) hudGmaps.href = `https://www.google.com/maps?q=${data.lat},${data.lon}`;
+
+            // Keep the Get Directions button target up-to-date
+            window._sosLiveLat = data.lat;
+            window._sosLiveLon = data.lon;
+
+            // Pan the map to follow
+            if (map) map.panTo(newLatLng, { animate: true, duration: 0.8 });
+        });
+    }
+}
 
 // ── Draw a road-snapped glowing polyline + cinematic flyToBounds ──
 // Uses OSRM for the actual driving path; falls back to straight line if it fails.
@@ -885,12 +1640,17 @@ async function cinematicMapFromCoords(originCoords, destCoords) {
     }
 
     // ── 2. Draw glowing neon cyan road-snapped polyline ──
+    let cinematicColor = isSentinelMode ? '#ff3333' : '#00ffff';
+    let cinematicClass = isSentinelMode ? 'sentinel-route-line' : 'neon-route-line';
     currentRouteLine = L.polyline(routePoints, {
-        color:     '#00ffff',
+        color:     cinematicColor,
         weight:    5,
         opacity:   0.95,
-        className: 'neon-route-line'
+        className: cinematicClass
     }).addTo(map);
+    if (isSentinelMode) {
+        showSentinelToast('🛡️ Sentinel Active: Routing via Primary Arterial Roads.');
+    }
 
     // ── 3. Origin stop marker (cyan) ──
     const oStop = L.circleMarker(oLatLng, {
@@ -936,6 +1696,160 @@ if (aiChatForm) {
             activeBotRoute = null;
             return;
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        //  SENTINEL SHIELD — AI CHATBOT COMMAND INTERCEPTOR
+        //  Handles shield commands entirely client-side before hitting the
+        //  backend API. This gives the AI "complete access" to the shield.
+        // ═══════════════════════════════════════════════════════════════════
+        const lowerText = text.toLowerCase().trim();
+
+        // ── Helper: send a rich HTML AI response in the chat ──
+        function appendAiHtml(html) {
+            if (!aiChatMessages) return;
+            const msg = document.createElement('div');
+            msg.className = 'ai-msg ai';
+            msg.innerHTML = html;
+            aiChatMessages.appendChild(msg);
+            aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+        }
+
+        // ── 1. ACTIVATE SHIELD ──
+        const activatePattern = /\b(activate|enable|turn on|start|arm|engage)\b.*\b(shield|sentinel|sos|safety|emergency|protection)\b|\b(shield|sentinel|sos|safety|emergency|protection)\b.*\b(on|activate|enable|start|arm|engage)\b|\b(i('m| am)\s*(not\s+)?(safe|scared|afraid|in danger|unsafe|feeling unsafe|nervous|worried))\b|\b(help me|i need help|emergency)\b/i;
+
+        if (activatePattern.test(lowerText)) {
+            if (isSentinelMode) {
+                appendAiHtml(
+                    `🛡️ <strong>Sentinel Shield is already ARMED.</strong><br><br>` +
+                    `${sentinelLastCoords
+                        ? `📍 Your live location: <strong>${sentinelLastCoords.lat.toFixed(5)}, ${sentinelLastCoords.lon.toFixed(5)}</strong> (±${Math.round(sentinelLastCoords.accuracy)}m)<br><br>` +
+                          `Say <strong>"send SOS"</strong> to share your location via WhatsApp, or <strong>"shield off"</strong> to deactivate.`
+                        : `⏳ GPS is still acquiring your position. Please wait a moment.`
+                    }`
+                );
+            } else {
+                toggleSentinelMode();
+                appendAiHtml(
+                    `🚨 <strong>Sentinel Shield ACTIVATED.</strong><br><br>` +
+                    `I'm acquiring your real GPS coordinates now using your device's hardware.<br><br>` +
+                    `<strong>What happens next:</strong><br>` +
+                    `• Your browser will ask for location permission — <strong>please allow it</strong><br>` +
+                    `• Once locked, your exact position appears on the map<br>` +
+                    `• A WhatsApp SOS with your Google Maps link will fire automatically<br><br>` +
+                    `Say <strong>"shield status"</strong> to check your coordinates, or <strong>"send SOS"</strong> to re-send your location.`
+                );
+            }
+            return;
+        }
+
+        // ── 2. DEACTIVATE SHIELD ──
+        const deactivatePattern = /\b(deactivate|disable|turn off|stop|disarm|disengage)\b.*\b(shield|sentinel|sos|safety|emergency|protection)\b|\b(shield|sentinel|sos|safety|emergency|protection)\b.*\b(off|deactivate|disable|stop|disarm)\b|\b(i('m| am) (safe|okay|fine|home|alright))\b|\b(cancel\s*(sos|shield|emergency|sentinel))\b/i;
+
+        if (deactivatePattern.test(lowerText)) {
+            if (!isSentinelMode) {
+                appendAiHtml(
+                    `🛡️ Sentinel Shield is currently <strong>OFF</strong>.<br><br>` +
+                    `There's nothing to deactivate. Say <strong>"activate shield"</strong> if you need emergency protection.`
+                );
+            } else {
+                deactivateSentinel();
+                appendAiHtml(
+                    `✅ <strong>Sentinel Shield deactivated.</strong><br><br>` +
+                    `GPS tracking has been stopped and your location marker has been cleared from the map.<br>` +
+                    `Stay safe! You can re-activate anytime by saying <strong>"activate shield"</strong> or tapping the shield button.`
+                );
+            }
+            return;
+        }
+
+        // ── 3. SHIELD STATUS ──
+        const statusPattern = /\b(shield|sentinel|sos|gps|location)\b.*\b(status|state|check|info|details|where am i|coordinates|position)\b|\b(status|state|check)\b.*\b(shield|sentinel|sos|gps)\b|\b(where am i|my location|my coordinates|my position|am i safe)\b/i;
+
+        if (statusPattern.test(lowerText)) {
+            if (!isSentinelMode) {
+                appendAiHtml(
+                    `🛡️ <strong>Sentinel Shield: OFF</strong><br><br>` +
+                    `The shield is not currently active. No GPS tracking in progress.<br><br>` +
+                    `Say <strong>"activate shield"</strong> to enable emergency protection with real-time GPS tracking and WhatsApp SOS.`
+                );
+            } else if (!sentinelLastCoords) {
+                appendAiHtml(
+                    `🛡️ <strong>Sentinel Shield: LOCATING...</strong><br><br>` +
+                    `⏳ GPS is actively acquiring your hardware coordinates. This usually takes a few seconds.<br>` +
+                    `Make sure location permissions are enabled in your browser.`
+                );
+            } else {
+                const { lat, lon, accuracy, timestamp } = sentinelLastCoords;
+                const time = new Date(timestamp).toLocaleTimeString('en-IN', { hour12: true });
+                const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                appendAiHtml(
+                    `🛡️ <strong>Sentinel Shield: ARMED ✅</strong><br><br>` +
+                    `📍 <strong>Latitude:</strong> ${lat.toFixed(6)}<br>` +
+                    `📍 <strong>Longitude:</strong> ${lon.toFixed(6)}<br>` +
+                    `🎯 <strong>Accuracy:</strong> ±${Math.round(accuracy)}m<br>` +
+                    `🕐 <strong>Last Fix:</strong> ${time}<br>` +
+                    `📡 <strong>Tracking Points:</strong> ${sentinelLocationHistory.length}<br><br>` +
+                    `🗺️ <a href="${mapsLink}" target="_blank" style="color:#ff6666;font-weight:700;">Open in Google Maps →</a><br><br>` +
+                    `Say <strong>"send SOS"</strong> to share this location, or <strong>"shield off"</strong> to deactivate.`
+                );
+            }
+            return;
+        }
+
+        // ── 4. SEND / RE-SEND SOS ──
+        const sosPattern = /\b(send|fire|trigger|share|broadcast)\b.*\b(sos|location|position|coordinates|emergency|alert|help)\b|\b(sos|whatsapp)\b|\b(share\s*(my\s+)?location)\b/i;
+
+        if (sosPattern.test(lowerText)) {
+            if (!isSentinelMode) {
+                appendAiHtml(
+                    `⚠️ Sentinel Shield is <strong>OFF</strong>. I need to activate it first to get your GPS coordinates.<br><br>` +
+                    `Activating now...`
+                );
+                toggleSentinelMode();
+                appendAiHtml(
+                    `🚨 <strong>Shield ACTIVATED.</strong> Once GPS locks on, your SOS will fire automatically via WhatsApp with your real Google Maps link.`
+                );
+            } else if (!sentinelLastCoords) {
+                appendAiHtml(
+                    `⏳ GPS is still acquiring your position. The SOS will fire automatically as soon as coordinates are locked.<br>` +
+                    `Please wait a moment...`
+                );
+            } else {
+                const { lat, lon } = sentinelLastCoords;
+                fireSentinelSOS(lat, lon);
+                const mapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+                appendAiHtml(
+                    `🚨 <strong>SOS SENT via WhatsApp!</strong><br><br>` +
+                    `📍 Location shared: <a href="${mapsLink}" target="_blank" style="color:#ff6666;font-weight:700;">${lat.toFixed(5)}, ${lon.toFixed(5)}</a><br><br>` +
+                    `The WhatsApp window should have opened. Select a contact and send the pre-filled message.<br>` +
+                    `Say <strong>"send SOS"</strong> again to re-send with your latest position.`
+                );
+            }
+            return;
+        }
+
+        // ── 5. SHIELD HELP — What can the shield do? ──
+        const helpPattern = /\b(what|how|explain|tell me about|features|capabilities)\b.*\b(shield|sentinel|sos|safety|emergency)\b|\b(shield|sentinel)\b.*\b(help|commands|options|what can)\b|\bsentinel\b$/i;
+
+        if (helpPattern.test(lowerText)) {
+            appendAiHtml(
+                `🛡️ <strong>Sentinel Shield — Commands</strong><br><br>` +
+                `Here's everything I can do with the shield:<br><br>` +
+                `🟢 <strong>"Activate shield"</strong> — Arms the shield, starts real GPS tracking, and auto-sends SOS via WhatsApp<br><br>` +
+                `🔴 <strong>"Deactivate shield"</strong> — Turns off GPS tracking and clears your location marker<br><br>` +
+                `📍 <strong>"Shield status"</strong> — Shows your live coordinates, accuracy, and tracking info<br><br>` +
+                `🚨 <strong>"Send SOS"</strong> — Sends your exact Google Maps location via WhatsApp<br><br>` +
+                `📡 <strong>"Where am I?"</strong> — Shows your current GPS position<br><br>` +
+                `💬 <strong>"I'm not safe"</strong> — Instantly activates the shield<br><br>` +
+                `💬 <strong>"I'm safe now"</strong> — Deactivates the shield<br><br>` +
+                `You can also tap the 🛡️ button at the bottom-left of the screen anytime.`
+            );
+            return;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        //  No shield command matched — proceed to backend AI as normal
+        // ═══════════════════════════════════════════════════════════════════
 
         // Typing indicator
         const typingEl = document.createElement('div');

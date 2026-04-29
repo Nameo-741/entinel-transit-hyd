@@ -1027,9 +1027,87 @@ app.get('/api/admin/stops-geo', async (req, res) => {
     }
 });
 
-// Start the Server
+// ================= SENTINEL SOS — REAL-TIME READ RECEIPTS (SOCKET.IO) =================
+const http = require('http');
+const { Server: SocketServer } = require('socket.io');
+
+const server = http.createServer(app);
+const io = new SocketServer(server, {
+    cors: { origin: '*', methods: ['GET', 'POST'] }
+});
+
+// Track active SOS sessions for debugging
+let activeSosSessions = 0;
+
+io.on('connection', (socket) => {
+    console.log(`[Socket.io] Client connected: ${socket.id}`);
+
+    // User joins their unique SOS room when the Shield arms
+    socket.on('join_sos', (sessionId) => {
+        if (!sessionId) return;
+        socket.join(sessionId);
+        activeSosSessions++;
+        console.log(`[SOS Room] Client ${socket.id} joined room "${sessionId}" (${activeSosSessions} active sessions)`);
+    });
+
+    // ── REAL-TIME LOCATION BROADCAST ──
+    // The sender continuously emits their updated GPS coords.
+    // We relay to everyone else in the same SOS room (the viewers).
+    socket.on('update_location', (data) => {
+        if (!data || !data.sessionId) return;
+        socket.to(data.sessionId).emit('location_updated', {
+            lat: data.lat,
+            lon: data.lon,
+            accuracy: data.accuracy || null,
+            timestamp: data.timestamp || Date.now()
+        });
+    });
+
+    // Cleanup on disconnect
+    socket.on('disconnect', () => {
+        activeSosSessions = Math.max(0, activeSosSessions - 1);
+        console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+    });
+});
+
+/**
+ * SOS Link Bouncer — "Read Receipt" redirect endpoint.
+ *
+ * When someone opens the SOS WhatsApp link, it hits THIS endpoint first.
+ * We emit a real-time 'sos_viewed' event to the sender's room with viewer
+ * metadata, then immediately 302-redirect to the real Google Maps link.
+ * The sender gets an instant notification that someone is viewing their location.
+ */
+app.get('/api/sos/view', (req, res) => {
+    const { id, lat, lon } = req.query;
+
+    if (!id || !lat || !lon) {
+        return res.status(400).send('Missing SOS parameters.');
+    }
+
+    // Build viewer metadata
+    const viewerInfo = {
+        timestamp: Date.now(),
+        timeStr: new Date().toLocaleTimeString('en-IN', { hour12: true }),
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown',
+        userAgent: req.headers['user-agent'] || 'Unknown',
+        referer: req.headers['referer'] || 'Direct link'
+    };
+
+    console.log(`[SOS Bouncer] 👁️ Link viewed for session "${id}" — IP: ${viewerInfo.ip}`);
+
+    // Emit the real-time "read receipt" to the sender's SOS room
+    io.to(id).emit('sos_viewed', viewerInfo);
+
+    // Redirect the viewer back to the frontend map view with SOS coordinates
+    res.redirect(302, `/?sos=true&id=${encodeURIComponent(id)}&lat=${req.query.lat}&lon=${req.query.lon}#results-view`);
+});
+
+// Start the Server (now using http.createServer wrapper for Socket.io)
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`🚀 Transit Backend running on http://localhost:${PORT}`);
     console.log(`🔒 God Mode Admin: http://localhost:${PORT}/admin`);
+    console.log(`🛡️ Sentinel SOS Bouncer: http://localhost:${PORT}/api/sos/view`);
+    console.log(`📡 Socket.io: Real-time SOS read receipts ACTIVE`);
 });

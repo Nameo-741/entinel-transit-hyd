@@ -1,0 +1,26 @@
+{
+  "name": "Sentinel Transit HYD",
+  "short_name": "Sentinel",
+  "description": "Hyderabad's real-time city bus tracker with AI-powered route intelligence and emergency SOS shield.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#050507",
+  "background_color": "#050507",
+  "categories": ["transportation", "navigation"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
