@@ -21,17 +21,21 @@
     padding: 0;
 }
 
-html {
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
     background: #050507;
-}
-
-body {
-    background: transparent;
     color: var(--text-main);
     font-family: 'Sora', sans-serif;
-    overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Prevent text size inflation on mobile */
+    -webkit-text-size-adjust: 100%;
+    /* Stop double-tap to zoom on UI elements */
+    touch-action: manipulation; 
 }
 
 /* Atmospheric Glows — subtle depth layer, low opacity so they
