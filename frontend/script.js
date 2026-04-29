@@ -16,7 +16,7 @@ tsParticles.load("tsparticles",{
 // ================= SENTINEL SHIELD — PROFESSIONAL GPS SOS SYSTEM =================
 // Set this to your Ngrok URL or deployed domain for production.
 // Leave empty ('') to auto-detect from window.location.origin or fall back to localhost.
-const PUBLIC_BASE_URL = 'https://payer-https://entinel-transit-hyd.onrender.com/-backstage.ngrok-free.dev';
+const PUBLIC_BASE_URL = '';
 
 let isSentinelMode = false;
 let sentinelWatchId = null;          // Geolocation watchPosition ID
@@ -576,12 +576,16 @@ const aiChatInput = document.getElementById("ai-chat-input");
 const aiChatMessages = document.getElementById("ai-chat-messages");
 
 function getApiBaseUrl() {
-    // If opened directly as a file, fallback to localhost backend.
+    // If opened directly as a local file fallback
     if (window.location.protocol === "file:") {
         return "http://localhost:5000";
     }
-    const host = window.location.hostname || "localhost";
-    return `${window.location.protocol}//${host}:5000`;
+    // If we are on localhost, attach the :5000 port for the local Node server
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        return `${window.location.protocol}//${window.location.hostname}:5000`;
+    }
+    // In production (Render), just use the standard origin without custom ports
+    return window.location.origin; 
 }
 const API_BASE_URL = getApiBaseUrl();
 
