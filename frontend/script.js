@@ -16,7 +16,7 @@ tsParticles.load("tsparticles",{
 // ================= SENTINEL SHIELD — PROFESSIONAL GPS SOS SYSTEM =================
 // Set this to your Ngrok URL or deployed domain for production.
 // Leave empty ('') to auto-detect from window.location.origin or fall back to localhost.
-const PUBLIC_BASE_URL = 'https://payer-hyperlink-backstage.ngrok-free.dev';
+const PUBLIC_BASE_URL = 'https://payer-https://entinel-transit-hyd.onrender.com/-backstage.ngrok-free.dev';
 
 let isSentinelMode = false;
 let sentinelWatchId = null;          // Geolocation watchPosition ID
@@ -325,7 +325,7 @@ function toggleSentinelMode() {
         //  A 15-second fallback ensures we don't wait forever.
         // ══════════════════════════════════════════════════════════════
         const GPS_ACCURACY_THRESHOLD = 30; // metres — anything above is too sloppy
-        const GPS_WARMUP_TIMEOUT_MS  = 15000; // 15s fallback
+        const GPS_WARMUP_TIMEOUT_MS = 15000; // 15s fallback
         let bestAccuracy = Infinity;       // track the tightest reading seen
 
         // Join the SOS room early so read receipts work the instant we fire
@@ -589,10 +589,10 @@ const API_BASE_URL = getApiBaseUrl();
 if (landing) {
     landing.addEventListener("click", () => {
         landing.classList.remove("active");
-        landing.classList.add("slide-top"); 
+        landing.classList.add("slide-top");
 
-        searchView.classList.remove("slide-bottom"); 
-        searchView.classList.add("active"); 
+        searchView.classList.remove("slide-bottom");
+        searchView.classList.add("active");
     });
 }
 
@@ -620,7 +620,7 @@ function highlightMatch(text, query) {
     );
 }
 function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
@@ -729,7 +729,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.field')) closeLists();
 });
 
-window.initAutocomplete = function() {
+window.initAutocomplete = function () {
     setupAutocomplete('from');
     setupAutocomplete('to');
 };
@@ -743,11 +743,11 @@ function swapStops() {
     const toInput = document.getElementById("to");
     const swapBtn = document.querySelector(".swap-btn");
 
-    if(!fromInput || !toInput) return;
+    if (!fromInput || !toInput) return;
 
     fromInput.classList.add("swap-down");
     toInput.classList.add("swap-up");
-    if(swapBtn) swapBtn.classList.add("spin");
+    if (swapBtn) swapBtn.classList.add("spin");
 
     setTimeout(() => {
         let temp = fromInput.value;
@@ -756,19 +756,19 @@ function swapStops() {
 
         fromInput.style.transition = "none";
         toInput.style.transition = "none";
-        if(swapBtn) swapBtn.style.transition = "none";
+        if (swapBtn) swapBtn.style.transition = "none";
 
         fromInput.classList.remove("swap-down");
         toInput.classList.remove("swap-up");
-        if(swapBtn) swapBtn.classList.remove("spin");
+        if (swapBtn) swapBtn.classList.remove("spin");
 
-        void fromInput.offsetHeight; 
+        void fromInput.offsetHeight;
 
         fromInput.style.transition = "";
         toInput.style.transition = "";
-        if(swapBtn) swapBtn.style.transition = "";
-        
-    }, 300); 
+        if (swapBtn) swapBtn.style.transition = "";
+
+    }, 300);
 }
 
 // ================= MAP INITIALIZATION — Framer Tier =================
@@ -781,7 +781,7 @@ let buses = [];
 let stopMarkers = [];
 let activeBusInterval = null;
 
-window.initMap = function() {
+window.initMap = function () {
     if (map) return; // Already initialized
     const mapContainer = document.getElementById('map');
     if (!mapContainer) return;
@@ -815,43 +815,43 @@ window.initMap();
 // ================= MAP THEME TOGGLE =================
 function toggleMapTheme() {
     let toggleBtn = document.getElementById("theme-toggle");
-    
+
     if (isDarkMap) {
         map.removeLayer(darkTiles);
         lightTiles.addTo(map);
         isDarkMap = false;
         toggleBtn.innerText = "🌙 Night Mode";
-        toggleBtn.style.background = "rgba(0, 0, 0, 0.4)"; 
+        toggleBtn.style.background = "rgba(0, 0, 0, 0.4)";
     } else {
         map.removeLayer(lightTiles);
         darkTiles.addTo(map);
         isDarkMap = true;
         toggleBtn.innerText = "🌞 Outdoor Mode";
-        toggleBtn.style.background = "rgba(255, 255, 255, 0.1)"; 
+        toggleBtn.style.background = "rgba(255, 255, 255, 0.1)";
     }
 }
 
 function formatGTFSTime(timeString) {
     if (!timeString) return "Unknown";
     if (!timeString.includes(':')) return timeString;
-    
+
     let parts = timeString.split(':');
     let hours = parseInt(parts[0], 10);
     let minutes = parseInt(parts[1], 10);
-    
+
     if (isNaN(hours) || isNaN(minutes)) return timeString;
-    
+
     let isNextDay = false;
     if (hours >= 24) {
         hours -= 24;
         isNextDay = true;
     }
-    
+
     let ampm = hours >= 12 ? 'PM' : 'AM';
     let formattedHours = hours % 12;
     formattedHours = formattedHours ? formattedHours : 12;
     let formattedMins = minutes < 10 ? '0' + minutes : minutes;
-    
+
     let result = `${formattedHours}:${formattedMins} ${ampm}`;
     if (isNextDay) {
         result += " Next Day";
@@ -899,11 +899,11 @@ async function searchBus() {
                 if (routeRes && routeRes.ok) {
                     let routeData = await routeRes.json();
                     if (routeData.distance) {
-                        distanceKm  = (routeData.distance || 0) / 1000;
+                        distanceKm = (routeData.distance || 0) / 1000;
                         durationMins = (routeData.duration || 0) / 60;
                     }
                 }
-            } catch(_) {}
+            } catch (_) { }
         }
 
         let busCost = 15 + Math.max(0, distanceKm) * 2;
@@ -961,7 +961,7 @@ async function searchBus() {
             liveBusData.forEach(bus => {
                 let fareCost = bus.isMetro ? metroCost : busCost;
                 let displayTime = formatGTFSTime(bus.arrival);
-                
+
                 results.innerHTML += `
                     <div class="bus-card" onclick="startLiveTracking('${bus.tripId}', '${bus.busNumber}', '${fromVal}', '${toVal}', '${travelType}')">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -983,9 +983,9 @@ async function searchBus() {
 
             document.querySelectorAll(".bus-card").forEach(card => {
                 card.addEventListener("mouseenter", () => {
-                    if(hoverSound) {
-                        hoverSound.currentTime = 0; 
-                        hoverSound.play().catch(err => {});
+                    if (hoverSound) {
+                        hoverSound.currentTime = 0;
+                        hoverSound.play().catch(err => { });
                     }
                 });
             });
@@ -997,7 +997,7 @@ async function searchBus() {
         resultsView.classList.remove("slide-right");
         resultsView.classList.add("active");
 
-        setTimeout(() => { map.invalidateSize(); }, 800); 
+        setTimeout(() => { map.invalidateSize(); }, 800);
 
     } catch (error) {
         console.error("Backend Connection Error:", error);
@@ -1007,11 +1007,11 @@ async function searchBus() {
 }
 
 // ================= LIVE GEOCODING & ROUTING =================
-async function getCoordinates(place){
+async function getCoordinates(place) {
     let res = await fetch(`${API_BASE_URL}/api/coordinates?location=${encodeURIComponent(place)}`);
-    if(!res.ok) throw new Error("Location not found");
+    if (!res.ok) throw new Error("Location not found");
     let data = await res.json();
-    if(data.lat === undefined || data.lon === undefined) throw new Error("Invalid coordinates response");
+    if (data.lat === undefined || data.lon === undefined) throw new Error("Invalid coordinates response");
     return [data.lat, data.lon];
 }
 
@@ -1026,13 +1026,13 @@ async function startLiveTracking(tripId, busNumber, from, to, travelType = 'Live
         stopMarkers.forEach(s => map.removeLayer(s));
         buses.forEach(b => map.removeLayer(b));
         if (activeBusInterval) clearInterval(activeBusInterval);
-        
+
         stopMarkers = [];
         buses = [];
         activeBusInterval = null;
 
         let route = [];
-        
+
         // ── 1. REAL GTFS TRIP SIMULATION ──
         if (tripId && tripId !== 'undefined' && tripId !== 'null') {
             let res = await fetch(`${API_BASE_URL}/api/trip-simulation?tripId=${tripId}`);
@@ -1090,13 +1090,13 @@ async function startLiveTracking(tripId, busNumber, from, to, travelType = 'Live
         let url = `${API_BASE_URL}/api/osrm-route?startLat=${encodeURIComponent(start[0])}&startLon=${encodeURIComponent(start[1])}&endLat=${encodeURIComponent(end[0])}&endLon=${encodeURIComponent(end[1])}`;
 
         let rRes = await fetch(url);
-        if(!rRes.ok) {
+        if (!rRes.ok) {
             const errData = await rRes.json().catch(() => ({}));
             throw new Error(errData.error || `Routing request failed (${rRes.status})`);
         }
         let data = await rRes.json();
 
-        if(!data.latlngs) {
+        if (!data.latlngs) {
             alert("Routing Error: Could not calculate path.");
             loader.classList.add("hidden");
             return;
@@ -1128,7 +1128,7 @@ async function startLiveTracking(tripId, busNumber, from, to, travelType = 'Live
         }
         loader.classList.add("hidden");
 
-    } catch(err) {
+    } catch (err) {
         console.error("Live Tracking Error:", err);
         loader.classList.add("hidden");
         alert(`System Error: ${err.message || "Failed to lock onto vehicle coordinates."}`);
@@ -1167,8 +1167,8 @@ function getBusIcon(busNumber) {
     });
 }
 
-function spawnLiveBus(route, busNumber){
-    let marker = L.marker(route[0], {icon: getBusIcon(busNumber)}).addTo(map);
+function spawnLiveBus(route, busNumber) {
+    let marker = L.marker(route[0], { icon: getBusIcon(busNumber) }).addTo(map);
     buses.push(marker);
     animateBus(marker, route);
 }
@@ -1178,13 +1178,13 @@ function spawnLiveBus(route, busNumber){
 // we prefer using the road-snapping `animateBus` function so the 
 // bus actually follows the road geometry.
 function spawnSimulatedBus(schedule, busNumber) {
-    if(!schedule || schedule.length === 0) return;
-    let marker = L.marker([schedule[0].lat, schedule[0].lon], {icon: getBusIcon(busNumber)}).addTo(map);
+    if (!schedule || schedule.length === 0) return;
+    let marker = L.marker([schedule[0].lat, schedule[0].lon], { icon: getBusIcon(busNumber) }).addTo(map);
     buses.push(marker);
 
     const now = new Date();
     const systemTime = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-    
+
     const tripStart = schedule[0].time;
     const tripEnd = schedule[schedule.length - 1].time;
 
@@ -1197,7 +1197,7 @@ function spawnSimulatedBus(schedule, busNumber) {
         simTime += isRealTime ? 1 : 5;
 
         if (simTime > tripEnd) {
-            simTime = tripStart; 
+            simTime = tripStart;
             isRealTime = false;
         }
 
@@ -1205,9 +1205,9 @@ function spawnSimulatedBus(schedule, busNumber) {
         let pointB = null;
 
         for (let i = 0; i < schedule.length - 1; i++) {
-            if (simTime >= schedule[i].time && simTime <= schedule[i+1].time) {
+            if (simTime >= schedule[i].time && simTime <= schedule[i + 1].time) {
                 pointA = schedule[i];
-                pointB = schedule[i+1];
+                pointB = schedule[i + 1];
                 break;
             }
         }
@@ -1216,27 +1216,27 @@ function spawnSimulatedBus(schedule, busNumber) {
             let timeSpan = pointB.time - pointA.time;
             let timeElapsed = simTime - pointA.time;
             let progress = timeSpan > 0 ? (timeElapsed / timeSpan) : 1;
-            
+
             let currentLat = pointA.lat + (pointB.lat - pointA.lat) * progress;
             let currentLon = pointA.lon + (pointB.lon - pointA.lon) * progress;
-            
+
             marker.setLatLng([currentLat, currentLon]);
         }
     }, 50);
 }
 
-function animateBus(marker, route){
+function animateBus(marker, route) {
     let index = 0;
-    if(activeBusInterval) clearInterval(activeBusInterval);
+    if (activeBusInterval) clearInterval(activeBusInterval);
 
     activeBusInterval = setInterval(() => {
         index++;
-        if(index >= route.length) {
+        if (index >= route.length) {
             clearInterval(activeBusInterval);
             return;
         }
         marker.setLatLng(route[index]);
-    }, 800); 
+    }, 800);
 }
 
 function clearLiveTracking() {
@@ -1304,28 +1304,28 @@ let activeBotRoute = null;
 
 // ── Inject chat-returned bus array into the sidebar, exactly like searchBus() does ──
 function injectChatResultsIntoSidebar(data) {
-    const results     = document.getElementById('results');
-    const loader      = document.getElementById('loader');
-    const hoverSound  = document.getElementById('hover-sound');
+    const results = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const hoverSound = document.getElementById('hover-sound');
     if (!results) return;
 
     if (loader) loader.classList.add('hidden');
     results.innerHTML = '';
 
-    const buses    = data.routes || [];
-    const fromVal  = data.from   || '';
-    const toVal    = data.to     || '';
-    const distKm   = data.distanceKm || 8;
+    const buses = data.routes || [];
+    const fromVal = data.from || '';
+    const toVal = data.to || '';
+    const distKm = data.distanceKm || 8;
 
     // Build the same comparison table as searchBus()
-    const busTime    = Math.max(1, Math.round(distKm / 0.35 + 15));
-    const metroTime  = Math.max(1, Math.round(distKm / 0.5));
+    const busTime = Math.max(1, Math.round(distKm / 0.35 + 15));
+    const metroTime = Math.max(1, Math.round(distKm / 0.5));
     const rapidoTime = Math.max(1, Math.round(distKm / 0.4 - 5));
-    const uberTime   = Math.max(1, Math.round(distKm / 0.35 + 5));
-    const busCost    = Math.round(15 + distKm * 2);
-    const metroCost  = Math.round(Math.min(60, 10 + distKm * 2));
+    const uberTime = Math.max(1, Math.round(distKm / 0.35 + 5));
+    const busCost = Math.round(15 + distKm * 2);
+    const metroCost = Math.round(Math.min(60, 10 + distKm * 2));
     const rapidoCost = Math.round(25 + distKm * 8);
-    const uberCost   = Math.round(60 + distKm * 18);
+    const uberCost = Math.round(60 + distKm * 18);
 
     results.innerHTML = `
         <div class="comparison-table">
@@ -1345,7 +1345,7 @@ function injectChatResultsIntoSidebar(data) {
 
     buses.forEach(bus => {
         const displayTime = formatGTFSTime(bus.arrival) || bus.arrival || 'Live Active';
-        const fare        = bus.calculatedFare || bus.fare || busCost;
+        const fare = bus.calculatedFare || bus.fare || busCost;
         results.innerHTML += `
             <div class="bus-card" onclick="startLiveTracking('${bus.tripId || ''}','${bus.busNumber}','${fromVal}','${toVal}','Live')">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -1367,7 +1367,7 @@ function injectChatResultsIntoSidebar(data) {
     // Hover sound on chat-injected cards
     document.querySelectorAll('.bus-card').forEach(card => {
         card.addEventListener('mouseenter', () => {
-            if (hoverSound) { hoverSound.currentTime = 0; hoverSound.play().catch(() => {}); }
+            if (hoverSound) { hoverSound.currentTime = 0; hoverSound.play().catch(() => { }); }
         });
     });
 }
@@ -1384,10 +1384,10 @@ function initTilt() {
             const yPct = y / rect.height;
             const rotateX = (yPct - 0.5) * -15; // Max 15deg rotation
             const rotateY = (xPct - 0.5) * 15;
-            
+
             el.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
         });
-        
+
         el.addEventListener('mouseleave', () => {
             el.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
         });
@@ -1422,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function startContinuousSentinelTracking() {
     if (sentinelWatchId) navigator.geolocation.clearWatch(sentinelWatchId);
-    
+
     sentinelWatchId = navigator.geolocation.watchPosition(
         (position) => {
             const { latitude: lat, longitude: lon, accuracy } = position.coords;
@@ -1620,7 +1620,7 @@ async function cinematicMapFromCoords(originCoords, destCoords) {
     if (activeBusInterval) { clearInterval(activeBusInterval); activeBusInterval = null; }
 
     const oLatLng = [originCoords.lat, originCoords.lon];
-    const dLatLng = [destCoords.lat,   destCoords.lon];
+    const dLatLng = [destCoords.lat, destCoords.lon];
 
     // ── 1. Fetch road-snapped path from OSRM ──
     let routePoints = [oLatLng, dLatLng]; // straight-line fallback
@@ -1643,9 +1643,9 @@ async function cinematicMapFromCoords(originCoords, destCoords) {
     let cinematicColor = isSentinelMode ? '#ff3333' : '#00ffff';
     let cinematicClass = isSentinelMode ? 'sentinel-route-line' : 'neon-route-line';
     currentRouteLine = L.polyline(routePoints, {
-        color:     cinematicColor,
-        weight:    5,
-        opacity:   0.95,
+        color: cinematicColor,
+        weight: 5,
+        opacity: 0.95,
         className: cinematicClass
     }).addTo(map);
     if (isSentinelMode) {
@@ -1668,8 +1668,8 @@ async function cinematicMapFromCoords(originCoords, destCoords) {
 
     // ── 5. Cinematic 'Drone' Fly-Over — buttery smooth camera swoop ──
     map.flyToBounds(currentRouteLine.getBounds(), {
-        padding:       [50, 50],
-        duration:      2.5,
+        padding: [50, 50],
+        duration: 2.5,
         easeLinearity: 0.25
     });
 }
@@ -1723,7 +1723,7 @@ if (aiChatForm) {
                     `🛡️ <strong>Sentinel Shield is already ARMED.</strong><br><br>` +
                     `${sentinelLastCoords
                         ? `📍 Your live location: <strong>${sentinelLastCoords.lat.toFixed(5)}, ${sentinelLastCoords.lon.toFixed(5)}</strong> (±${Math.round(sentinelLastCoords.accuracy)}m)<br><br>` +
-                          `Say <strong>"send SOS"</strong> to share your location via WhatsApp, or <strong>"shield off"</strong> to deactivate.`
+                        `Say <strong>"send SOS"</strong> to share your location via WhatsApp, or <strong>"shield off"</strong> to deactivate.`
                         : `⏳ GPS is still acquiring your position. Please wait a moment.`
                     }`
                 );
@@ -1859,9 +1859,9 @@ if (aiChatForm) {
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/chat`, {
-                method:  'POST',
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ message: text })
+                body: JSON.stringify({ message: text })
             });
             const data = await response.json().catch(() => ({}));
             if (typingEl.parentNode) typingEl.remove();
@@ -1882,9 +1882,9 @@ if (aiChatForm) {
 
                 // 1. Fill the "From" / "To" inputs so manual search still works
                 const fromEl = document.getElementById('from');
-                const toEl   = document.getElementById('to');
+                const toEl = document.getElementById('to');
                 if (fromEl) fromEl.value = data.from || '';
-                if (toEl)   toEl.value   = data.to   || '';
+                if (toEl) toEl.value = data.to || '';
 
                 // 2. Inject all bus cards into the sidebar
                 injectChatResultsIntoSidebar(data);
@@ -1902,10 +1902,10 @@ if (aiChatForm) {
 
                 // 5. Store the top result so the user can confirm tracking
                 activeBotRoute = {
-                    tripId:             data.routes[0]?.tripId || null,
+                    tripId: data.routes[0]?.tripId || null,
                     suggestedBusNumber: data.suggestedBusNumber,
-                    from:               data.from,
-                    to:                 data.to
+                    from: data.from,
+                    to: data.to
                 };
 
             } else {
@@ -1926,23 +1926,23 @@ const adminModal = document.getElementById('admin-modal');
 let clickCount = 0;
 let clickTimer;
 
-if(busIcon) {
+if (busIcon) {
     busIcon.addEventListener("click", (e) => {
-        e.stopPropagation(); 
+        e.stopPropagation();
         clickCount++;
         if (clickCount === 1) {
-            clickTimer = setTimeout(() => { clickCount = 0; }, 1200); 
+            clickTimer = setTimeout(() => { clickCount = 0; }, 1200);
         }
         if (clickCount === 3) {
             clearTimeout(clickTimer);
             clickCount = 0;
-            if(adminModal) adminModal.classList.add("show");
+            if (adminModal) adminModal.classList.add("show");
         }
     });
 }
 
 function closeAdmin() {
-    if(adminModal) adminModal.classList.remove("show");
+    if (adminModal) adminModal.classList.remove("show");
 }
 
 // ================= GOD MODE TERMINAL STREAM =================
@@ -1996,7 +1996,7 @@ function startTerminalStream() {
         // Build the timestamp
         const now = new Date();
         const ts = now.toLocaleTimeString('en-IN', { hour12: false }) +
-                   '.' + String(now.getMilliseconds()).padStart(3, '0');
+            '.' + String(now.getMilliseconds()).padStart(3, '0');
 
         const el = document.createElement('div');
         el.className = 'terminal-log';
@@ -2048,8 +2048,8 @@ function loginAdmin() {
         el.className = 'terminal-log';
         el.style.color = '#ff4444';
         el.style.textShadow = '0 0 8px rgba(255,0,0,0.7)';
-        el.innerHTML = `<span class="ts">[${new Date().toLocaleTimeString('en-IN', {hour12:false})}]</span>` +
-                       `⛔ ACCESS DENIED — Invalid credentials. Intrusion logged.`;
+        el.innerHTML = `<span class="ts">[${new Date().toLocaleTimeString('en-IN', { hour12: false })}]</span>` +
+            `⛔ ACCESS DENIED — Invalid credentials. Intrusion logged.`;
         terminal.appendChild(el);
         if (_terminalIntervalId) clearInterval(_terminalIntervalId);
         setTimeout(() => terminal.classList.add('hidden'), 4000);
